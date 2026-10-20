@@ -1,0 +1,62 @@
+# Compiled class files & build directories
+**/target/
+target/
+**/dist/
+dist/
+**/build/
+build/
+*.class
+
+# Node / Frontend dependencies
+**/node_modules/
+node_modules/
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment and secrets
+.env
+.env.*.local
+*.env
+!.env.example
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
+.metadata/
+*.ipr
+*.iws
+bin/
+.project
+.classpath
+.settings/
+
+# Database dumps, backups & test scratch
+database/backup_*.sql
+database/*.dump
+database/*.bak
+*.sql.bak
+/scratch/
+/pdf-source/
+/documents/
+/Images/
+/CHANGES.md
+
+# Interview preparation documents (kept locally)
+/SECURITY.md
+/ARCHITECTURE.md
+/DATABASE.md
+/FRONTEND.md
+/ROLE_FLOWS.md
+/AI_INTEGRATION.md
+/PROJECT_OVERVIEW.md
+/INTERVIEW_HIGHLIGHTS.md
+
+# Logs & temp files
+*.log
+logs/
+.DS_Store
+Thumbs.db
+.tempmediaStorage/
