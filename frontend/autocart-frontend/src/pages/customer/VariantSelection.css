@@ -1,0 +1,227 @@
+.variant-banner {
+  background:
+    linear-gradient(90deg, rgba(10, 15, 30, 0.97), rgba(15, 23, 42, 0.96)),
+    url("/images/banner/hero-bg.png");
+
+  background-size: cover;
+  background-position: center;
+
+  border-radius: 26px;
+
+  padding: 55px 60px;
+
+  overflow: hidden;
+
+  position: relative;
+
+  margin-bottom: 45px;
+}
+
+.variant-banner::after {
+  content: "";
+
+  position: absolute;
+
+  right: -120px;
+
+  top: 50%;
+
+  transform: translateY(-50%);
+
+  width: 600px;
+
+  height: 600px;
+
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.22), transparent 70%);
+
+  pointer-events: none;
+
+  z-index: 1;
+}
+
+.variant-hero {
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+}
+
+.variant-text {
+  max-width: 430px;
+
+  position: relative;
+
+  z-index: 2;
+}
+
+.variant-text h1 {
+  font-size: 60px;
+
+  color: white;
+
+  font-weight: 800;
+
+  margin-bottom: 20px;
+}
+
+.variant-text p {
+  color: #d5d9e4;
+
+  line-height: 1.8;
+
+  font-size: 18px;
+}
+
+.variant-image {
+  flex: 1;
+
+  display: flex;
+
+  justify-content: flex-end;
+
+  position: relative;
+
+  z-index: 2;
+}
+
+.variant-image img {
+  width: 520px;
+
+  object-fit: contain;
+
+  filter: drop-shadow(0 25px 45px rgba(0, 0, 0, 0.45));
+}
+
+.variant-list {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 16px;
+}
+
+.variant-card h4 {
+  margin: 0;
+
+  font-weight: 700;
+}
+
+.variant-card small {
+  color: #666;
+}
+
+.variant-card h5 {
+  color: #2563eb;
+
+  font-size: 24px;
+
+  margin: 0;
+}
+.variant-price {
+  display: flex;
+
+  align-items: center;
+
+  gap: 20px;
+}
+
+.variant-price span {
+  font-size: 28px;
+
+  color: #2563eb;
+
+  font-weight: bold;
+}
+
+.variant-section {
+  margin-top: 40px;
+}
+
+.variant-section h2 {
+  font-weight: 700;
+
+  margin-bottom: 25px;
+}
+
+.variant-left {
+  display: flex;
+
+  align-items: center;
+
+  gap: 18px;
+}
+
+.variant-card {
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+  padding: 22px;
+
+  margin-bottom: 18px;
+
+  border: 2px solid #ececec;
+
+  border-radius: 18px;
+
+  cursor: pointer;
+
+  transition: 0.25s;
+
+  background: white;
+}
+
+.variant-card:hover {
+  border-color: #2563eb;
+}
+
+.variant-card.active {
+  border-color: #2563eb;
+
+  background: #eff6ff;
+}
+
+.variant-card input {
+  width: 20px;
+
+  height: 20px;
+}
+
+.continue-btn {
+  margin-top: 35px;
+
+  background: #2563eb;
+
+  color: white;
+
+  border: none;
+
+  padding: 16px 38px;
+
+  border-radius: 12px;
+
+  font-size: 18px;
+
+  font-weight: 600;
+
+  float: right;
+}
+
+.continue-btn:hover {
+  background: #1d4ed8;
+}
+
+.back-link {
+  display: inline-block;
+
+  margin-bottom: 18px;
+
+  color: #2563eb;
+
+  font-weight: 600;
+
+  text-decoration: none;
+}

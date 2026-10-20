@@ -1,0 +1,69 @@
+.brand-banner {
+  background: linear-gradient(180deg, #f9fbff 0%, #f3f7fd 100%);
+  border-radius: 24px;
+  padding: 28px 34px;
+  margin-bottom: 40px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+
+.back-btn {
+  background: transparent;
+  border: none;
+  color: #2563eb;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 28px;
+  padding: 0;
+}
+
+.back-btn:hover {
+  color: #1d4ed8;
+}
+
+.brand-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.brand-content h1 {
+  font-size: 54px;
+  font-weight: 800;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.brand-content p {
+  font-size: 18px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.brand-logo {
+  width: 150px;
+  object-fit: contain;
+}
+
+.brand-banner-image img {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  display: block;
+  border-radius: 20px;
+}
+
+.brand-banner-image {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  width: 100%;
+}
+
+.brand-banner-image::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.15), transparent 40%);
+}

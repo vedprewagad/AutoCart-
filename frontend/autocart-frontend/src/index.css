@@ -1,0 +1,62 @@
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #f8fafc;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Fluid responsive container adjustments */
+@media (max-width: 768px) {
+  .container {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}
+
+/* Horizontal scrollbar utility for mobile tab bars */
+.overflow-x-auto {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+.overflow-x-auto::-webkit-scrollbar {
+  display: none;
+}
+
+/* Touch-friendly target sizing */
+button,
+a,
+select,
+input:not([type="radio"]):not([type="checkbox"]) {
+  min-height: 38px;
+}
+
+input[type="radio"],
+input[type="checkbox"] {
+  min-height: auto !important;
+  width: 1.1em;
+  height: 1.1em;
+  cursor: pointer;
+}
+
+/* Global Responsive Table Wrappers */
+.table-responsive {
+  border-radius: 12px;
+  -webkit-overflow-scrolling: touch;
+}

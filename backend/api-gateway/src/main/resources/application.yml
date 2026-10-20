@@ -1,0 +1,69 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "${CORS_ALLOWED_ORIGINS:http://localhost:5173}"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+      routes:
+        # 1. Business Service Admin sub-routes (Higher priority)
+        # CRITICAL (SEC-08): These specific routes (/api/admin/catalog/** and /api/admin/inventory/**)
+        # MUST remain strictly ABOVE the /api/admin/** route below.
+        # Spring Cloud Gateway matches routes in definition order. If the /api/admin/** route
+        # were placed above these, it would catch all admin requests and route catalog/inventory
+        # operations to auth-service instead of business-service.
+        - id: business-admin-catalog
+          uri: lb://BUSINESS-SERVICE
+          predicates:
+            - Path=/api/admin/catalog/**
+        - id: business-admin-inventory
+          uri: lb://BUSINESS-SERVICE
+          predicates:
+            - Path=/api/admin/inventory/**
+
+        # 2. Auth Service endpoints
+        # Note: /api/admin/** acts as a catch-all for remaining admin operations (e.g. /api/admin/login).
+        - id: auth-service-routes
+          uri: lb://AUTH-SERVICE
+          predicates:
+            - Path=/api/auth/**, /api/admin/**
+
+        # 3. Business Service public & dealer endpoints
+        - id: business-service-routes
+          uri: lb://BUSINESS-SERVICE
+          predicates:
+            - Path=/api/brands/**, /api/models/**, /api/variants/**, /api/vehicles/**, /api/dealer/**, /api/test-drives/**, /api/user-context/**, /api/ratings/**
+
+        # 4. Transaction Service endpoints
+        - id: transaction-service-routes
+          uri: lb://TRANSACTION-SERVICE
+          predicates:
+            - Path=/api/transaction/**
+
+        # 5. AI Service endpoints
+        - id: ai-service-routes
+          uri: lb://AI-SERVICE
+          predicates:
+            - Path=/api/ai/**
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://localhost:8761/eureka/

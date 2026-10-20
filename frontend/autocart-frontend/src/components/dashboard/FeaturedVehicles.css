@@ -1,0 +1,25 @@
+.featured-section {
+  max-width: 1320px;
+  margin: 40px auto;
+  padding: 0 15px;
+}
+
+.vehicle-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+}
+
+@media (max-width: 992px) {
+  .vehicle-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+}
+
+@media (max-width: 576px) {
+  .vehicle-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}

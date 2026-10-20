@@ -1,0 +1,37 @@
+.spec-card {
+  background: white;
+
+  border-radius: 18px;
+
+  padding: 22px 26px;
+
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+  border: 1px solid #e5e7eb;
+
+  transition: 0.3s;
+}
+
+.spec-card:hover {
+  border-color: #2563eb;
+
+  transform: translateY(-4px);
+
+  box-shadow: 0 10px 25px rgba(37, 99, 235, 0.12);
+}
+
+.spec-card span {
+  color: #6b7280;
+
+  font-size: 15px;
+}
+
+.spec-card strong {
+  font-size: 18px;
+
+  color: #111827;
+}
