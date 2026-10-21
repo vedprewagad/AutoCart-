@@ -151,11 +151,37 @@ public class AiServiceImpl implements AiService {
         return response;
     }
 
+    private List<String> fetchDynamicBrands() {
+        try {
+            String url = businessServiceUrl + "/api/brands";
+            ResponseEntity<List> response = restTemplate.getForEntity(url, List.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                List<String> dynamicBrands = new ArrayList<>();
+                for (Object item : response.getBody()) {
+                    if (item instanceof Map) {
+                        Object name = ((Map<?, ?>) item).get("name");
+                        if (name != null) {
+                            dynamicBrands.add(name.toString().trim());
+                        }
+                    }
+                }
+                if (!dynamicBrands.isEmpty()) {
+                    return dynamicBrands;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not dynamically retrieve brand names from business-service ({}), using default catalog fallback: {}", businessServiceUrl, e.getMessage());
+        }
+        return List.of("Honda", "Mahindra", "MG Motor", "Toyota", "Volkswagen");
+    }
+
     private Map<String, Object> callAnthropicApiServerSide(String query) throws Exception {
+        List<String> availableBrands = fetchDynamicBrands();
+        String brandsEnum = "\"" + String.join("\", \"", availableBrands) + "\"";
         String systemPrompt = "You are an expert car recommendation AI assistant for AutoCart Indian automotive marketplace.\n" +
                 "Parse the customer's request and reply with a JSON object matching this schema:\n" +
                 "{\n" +
-                "  \"brand\": string or null (one of \"Honda\", \"Mahindra\", \"MG Motor\", \"Toyota\", \"Volkswagen\"),\n" +
+                "  \"brand\": string or null (one of " + brandsEnum + "),\n" +
                 "  \"bodyType\": string or null (one of \"SUV\", \"SEDAN\", \"HATCHBACK\", \"MUV\"),\n" +
                 "  \"fuelType\": string or null (one of \"PETROL\", \"DIESEL\", \"ELECTRIC\", \"HYBRID\", \"CNG\"),\n" +
                 "  \"transmission\": string or null (one of \"AUTOMATIC\", \"MANUAL\"),\n" +
@@ -217,11 +243,23 @@ public class AiServiceImpl implements AiService {
         ExtractedFiltersDto filters = new ExtractedFiltersDto();
         int matches = 0;
 
-        if (q.contains("honda")) { filters.setBrand("Honda"); matches++; }
-        else if (q.contains("mahindra")) { filters.setBrand("Mahindra"); matches++; }
-        else if (q.contains("mg")) { filters.setBrand("MG Motor"); matches++; }
-        else if (q.contains("toyota")) { filters.setBrand("Toyota"); matches++; }
-        else if (q.contains("volkswagen") || q.contains("vw") || q.contains("volkswagon")) { filters.setBrand("Volkswagen"); matches++; }
+        List<String> dynamicBrands = fetchDynamicBrands();
+        for (String b : dynamicBrands) {
+            String bLower = b.toLowerCase();
+            if (q.contains(bLower)) {
+                filters.setBrand(b);
+                matches++;
+                break;
+            } else if (bLower.equals("volkswagen") && (q.contains("vw") || q.contains("volkswagon"))) {
+                filters.setBrand("Volkswagen");
+                matches++;
+                break;
+            } else if (bLower.contains("mg") && q.contains("mg")) {
+                filters.setBrand(b);
+                matches++;
+                break;
+            }
+        }
 
         if (q.contains("suv")) { filters.setBodyType("SUV"); matches++; }
         else if (q.contains("sedan")) { filters.setBodyType("SEDAN"); matches++; }

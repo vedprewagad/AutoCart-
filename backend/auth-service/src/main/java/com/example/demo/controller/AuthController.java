@@ -26,9 +26,11 @@ public class AuthController {
 	private boolean cookieSecure;
 
 	private final AuthService authService;
+	private final com.example.demo.security.LoginAttemptLimiter loginAttemptLimiter;
 
-	public AuthController(AuthService authService) {
+	public AuthController(AuthService authService, com.example.demo.security.LoginAttemptLimiter loginAttemptLimiter) {
 		this.authService = authService;
+		this.loginAttemptLimiter = loginAttemptLimiter;
 	}
 
 	@GetMapping("/me")
@@ -50,9 +52,19 @@ public class AuthController {
 	}
 
 	@PostMapping("/forgot-password")
-	public ResponseEntity<String> forgotPassword(@RequestBody java.util.Map<String, String> body) {
-		String email = body.get("email");
-		return ResponseEntity.ok(authService.forgotPassword(email));
+	public ResponseEntity<String> forgotPassword(@RequestBody java.util.Map<String, String> body, jakarta.servlet.http.HttpServletRequest httpRequest) {
+		String email = body != null ? body.get("email") : null;
+		if (loginAttemptLimiter.isBlocked(httpRequest, email)) {
+			throw new com.example.demo.exception.RateLimitExceededException("Too many password reset requests. Please try again after 15 minutes.");
+		}
+		try {
+			String result = authService.forgotPassword(email);
+			loginAttemptLimiter.recordFailure(httpRequest, email);
+			return ResponseEntity.ok(result);
+		} catch (Exception e) {
+			loginAttemptLimiter.recordFailure(httpRequest, email);
+			throw e;
+		}
 	}
 
 	@PostMapping("/reset-password")
@@ -71,14 +83,24 @@ public class AuthController {
 
 	// LOGIN
 	@PostMapping("/login")
-	public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+	public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request, jakarta.servlet.http.HttpServletRequest httpRequest) {
+		String email = request.getEmail();
+		if (loginAttemptLimiter.isBlocked(httpRequest, email)) {
+			throw new com.example.demo.exception.RateLimitExceededException("Too many failed login attempts. Please try again after 15 minutes.");
+		}
 
-		AuthResponse response = authService.login(request);
+		try {
+			AuthResponse response = authService.login(request);
+			loginAttemptLimiter.reset(httpRequest, email);
 
-		ResponseCookie cookie = ResponseCookie.from("jwt", response.getToken()).httpOnly(true).secure(cookieSecure)
-				.path("/").sameSite("Lax").maxAge(60 * 60 * 24).build();
+			ResponseCookie cookie = ResponseCookie.from("jwt", response.getToken()).httpOnly(true).secure(cookieSecure)
+					.path("/").sameSite("Lax").maxAge(60 * 60 * 24).build();
 
-		return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, cookie.toString()).body(response);
+			return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, cookie.toString()).body(response);
+		} catch (Exception e) {
+			loginAttemptLimiter.recordFailure(httpRequest, email);
+			throw e;
+		}
 	}
 
 	// LOGOUT

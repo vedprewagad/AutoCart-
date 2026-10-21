@@ -16,9 +16,11 @@ import com.autocart.businessservice.security.JwtAuthenticationFilter;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
+    private final InternalTokenFilter internalTokenFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, InternalTokenFilter internalTokenFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.internalTokenFilter = internalTokenFilter;
     }
 
     @Bean
@@ -28,6 +30,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/api/internal/**").permitAll()
                 .requestMatchers("/api/admin/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/brands/**", "/api/models/**", "/api/variants/**", "/api/vehicles/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/ratings/dealer/**").permitAll()
@@ -38,6 +41,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/test-drives/**").authenticated()
                 .anyRequest().authenticated()
             )
+            .addFilterBefore(internalTokenFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

@@ -43,12 +43,12 @@ public class TestDriveBooking {
     @Column(name = "booked_at", insertable = false, updatable = false)
     private LocalDateTime bookedAt;
 
-    @Transient
+    @Column(name = "customer_name", length = 100)
     private String customerName;
 
-    @Transient
+    @Column(name = "customer_mobile", length = 20)
     private String customerMobile;
 
-    @Transient
+    @Column(name = "showroom_name", length = 150)
     private String showroomName;
 }

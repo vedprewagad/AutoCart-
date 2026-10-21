@@ -75,7 +75,7 @@ function SearchSuggestions({ searchTerm }) {
         <div
           key={vehicle.variantId}
           className="search-item"
-          onClick={() => navigate(vehicle.modelId ? `/models/${vehicle.modelId}` : `/vehicles/${vehicle.variantId}`)}
+          onClick={() => navigate(`/models/${vehicle.modelId || vehicle.variantId}`)}
         >
           🚗 {vehicle.brand} {vehicle.model}
           <small className="ms-2 text-muted">{vehicle.variant}</small>

@@ -11,4 +11,5 @@ public interface TestDriveBookingRepository extends JpaRepository<TestDriveBooki
     List<TestDriveBooking> findByDealerId(Long dealerId);
     boolean existsByDealerIdAndVariant_IdAndPreferredDateAndPreferredTimeAndStatusNotIn(
             Long dealerId, Long variantId, LocalDate preferredDate, String preferredTime, Collection<String> statuses);
+    boolean existsByUserIdAndDealerIdAndStatus(Long userId, Long dealerId, String status);
 }

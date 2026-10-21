@@ -115,7 +115,12 @@ function DealerComparisonModal({ variant, onClose, onBookTestDrive }) {
                             className="btn btn-outline-primary btn-sm fw-bold"
                             onClick={() => {
                               if (!user) {
-                                navigate("/login", { state: { from: `/vehicle/${variant?.id}` } });
+                                navigate("/login", {
+                                  state: {
+                                    from: `/models/${variant?.modelId}`,
+                                    testDrive: { variantId: variant?.id, dealerId: item.dealerId }
+                                  }
+                                });
                               } else if (onBookTestDrive) {
                                 onBookTestDrive(item.dealerId);
                               }
@@ -132,7 +137,17 @@ function DealerComparisonModal({ variant, onClose, onBookTestDrive }) {
                               className="btn btn-primary btn-sm fw-bold"
                               onClick={() => {
                                 if (!user) {
-                                  navigate("/login", { state: { from: "/payment" } });
+                                  navigate("/login", {
+                                    state: {
+                                      from: "/payment",
+                                      checkoutState: {
+                                        variant,
+                                        inventory: item,
+                                        price: finalPrice,
+                                        dealerName: showroomTitle
+                                      }
+                                    }
+                                  });
                                 } else {
                                   navigate(`/payment`, { state: { variant, inventory: item, price: finalPrice } });
                                 }

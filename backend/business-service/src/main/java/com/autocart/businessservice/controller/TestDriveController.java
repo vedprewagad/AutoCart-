@@ -32,6 +32,9 @@ public class TestDriveController {
     private final JwtService jwtService;
     private final JdbcTemplate jdbcTemplate;
 
+    @Autowired(required = false)
+    private org.springframework.web.client.RestTemplate restTemplate;
+
     public TestDriveController(
             TestDriveBookingRepository bookingRepository,
             CarVariantRepository variantRepository,
@@ -77,12 +80,37 @@ public class TestDriveController {
         booking.setPreferredTime(request.getPreferredTime());
         booking.setStatus("PENDING");
 
+        // Stored snapshot at creation
+        hydrateCustomerInfo(booking);
+
         return ResponseEntity.ok(bookingRepository.save(booking));
     }
 
     private void hydrateCustomerInfo(TestDriveBooking booking) {
-        if (jdbcTemplate != null) {
-            if (booking.getUserId() != null) {
+        if (booking == null) return;
+
+        // 1. Customer User details
+        if (booking.getUserId() != null && (booking.getCustomerName() == null || booking.getCustomerName().isBlank())) {
+            boolean userHydrated = false;
+            if (restTemplate != null) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> uMap = restTemplate.getForObject(
+                            "http://AUTH-SERVICE/api/internal/users/" + booking.getUserId(),
+                            Map.class
+                    );
+                    if (uMap != null) {
+                        String fn = uMap.get("firstName") != null ? uMap.get("firstName").toString() : "";
+                        String ln = uMap.get("lastName") != null ? uMap.get("lastName").toString() : "";
+                        String mob = uMap.get("mobile") != null ? uMap.get("mobile").toString() : "";
+                        booking.setCustomerName((fn + " " + ln).trim());
+                        booking.setCustomerMobile(mob);
+                        userHydrated = true;
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (!userHydrated && jdbcTemplate != null) {
                 try {
                     Map<String, Object> row = jdbcTemplate.queryForMap(
                             "SELECT first_name, last_name, mobile FROM users WHERE id = ?",
@@ -96,7 +124,26 @@ public class TestDriveController {
                 } catch (Exception ignored) {
                 }
             }
-            if (booking.getDealerId() != null) {
+        }
+
+        // 2. Showroom details
+        if (booking.getDealerId() != null && (booking.getShowroomName() == null || booking.getShowroomName().isBlank())) {
+            boolean dealerHydrated = false;
+            if (restTemplate != null) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> dMap = restTemplate.getForObject(
+                            "http://AUTH-SERVICE/api/internal/dealers/" + booking.getDealerId(),
+                            Map.class
+                    );
+                    if (dMap != null && dMap.get("showroomName") != null) {
+                        booking.setShowroomName((String) dMap.get("showroomName"));
+                        dealerHydrated = true;
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (!dealerHydrated && jdbcTemplate != null) {
                 try {
                     Map<String, Object> dRow = jdbcTemplate.queryForMap(
                             "SELECT showroom_name FROM dealers WHERE id = ?",
@@ -198,6 +245,17 @@ public class TestDriveController {
             }
         }
 
+        String currentStatus = booking.getStatus() != null ? booking.getStatus().toUpperCase() : "PENDING";
+        if (List.of("COMPLETED", "REJECTED", "CANCELLED").contains(currentStatus)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Cannot update test drive booking in terminal state: " + currentStatus));
+        }
+
+        if ("CONFIRMED".equals(currentStatus) && !List.of("COMPLETED", "CANCELLED", "REJECTED").contains(requestedStatus)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Invalid state transition from CONFIRMED to " + requestedStatus));
+        }
+
         boolean isAdmin = role != null && (role.toUpperCase().contains("ADMIN") || role.toUpperCase().contains("SUPER_ADMIN"));
 
         if (!isAdmin) {
@@ -212,7 +270,20 @@ public class TestDriveController {
                 }
             } else if (role != null && role.toUpperCase().contains("DEALER")) {
                 Long authDealerId = null;
-                if (jdbcTemplate != null) {
+                if (restTemplate != null) {
+                    try {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> dMap = restTemplate.getForObject(
+                                "http://AUTH-SERVICE/api/internal/dealers/user/" + authUserId,
+                                Map.class
+                        );
+                        if (dMap != null && dMap.get("dealerId") != null) {
+                            authDealerId = ((Number) dMap.get("dealerId")).longValue();
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+                if (authDealerId == null && jdbcTemplate != null) {
                     try {
                         authDealerId = jdbcTemplate.queryForObject(
                                 "SELECT id FROM dealers WHERE user_id = ?", Long.class, authUserId);
@@ -233,7 +304,9 @@ public class TestDriveController {
         if (body.containsKey("cancellationReason")) {
             booking.setCancellationReason(body.get("cancellationReason"));
         }
-        return ResponseEntity.ok(bookingRepository.save(booking));
+        TestDriveBooking saved = bookingRepository.save(booking);
+        hydrateCustomerInfo(saved);
+        return ResponseEntity.ok(saved);
     }
 
     private Long resolveAuthenticatedUserId(HttpServletRequest request) {

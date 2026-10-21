@@ -1,14 +1,34 @@
-import React, { useState } from "react";
-import { bookTestDrive } from "../../services/dealerService";
+import React, { useState, useEffect } from "react";
+import { bookTestDrive, getApprovedDealersForVariant } from "../../services/dealerService";
 import { useSelector } from "react-redux";
 
 function TestDriveModal({ variant, dealerId, onClose }) {
   const user = useSelector((state) => state.auth.user);
+  const [selectedDealerId, setSelectedDealerId] = useState(dealerId || "");
+  const [dealers, setDealers] = useState([]);
+  const [loadingDealers, setLoadingDealers] = useState(false);
   const [preferredDate, setPreferredDate] = useState("");
   const [preferredTime, setPreferredTime] = useState("10:00 AM");
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+
+  useEffect(() => {
+    if (dealerId) {
+      setSelectedDealerId(dealerId);
+    } else if (variant?.id) {
+      setLoadingDealers(true);
+      getApprovedDealersForVariant(variant.id)
+        .then((data) => {
+          setDealers(data || []);
+          if (data && data.length > 0) {
+            setSelectedDealerId(data[0].dealerId);
+          }
+        })
+        .catch((err) => console.error("Error loading dealers for test drive:", err))
+        .finally(() => setLoadingDealers(false));
+    }
+  }, [dealerId, variant]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -16,8 +36,9 @@ function TestDriveModal({ variant, dealerId, onClose }) {
       setErrorMsg("Please log in to book a test drive.");
       return;
     }
-    if (!dealerId) {
-      setErrorMsg("No dealer selected for test drive. Please select a showroom first.");
+    const targetDealerId = selectedDealerId || dealerId;
+    if (!targetDealerId) {
+      setErrorMsg("No dealer selected for test drive. Please select an authorized showroom.");
       return;
     }
     if (!preferredDate) {
@@ -29,7 +50,7 @@ function TestDriveModal({ variant, dealerId, onClose }) {
     try {
       await bookTestDrive({
         userId: user.id,
-        dealerId: dealerId,
+        dealerId: Number(targetDealerId),
         variantId: variant?.id,
         preferredDate,
         preferredTime,
@@ -89,6 +110,29 @@ function TestDriveModal({ variant, dealerId, onClose }) {
                 </p>
 
                 {errorMsg && <div className="alert alert-danger small py-2 mb-3">{errorMsg}</div>}
+
+                {loadingDealers ? (
+                  <div className="text-muted small mb-3">
+                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                    Loading authorized showrooms...
+                  </div>
+                ) : dealers && dealers.length > 0 ? (
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">Select Showroom / Dealer</label>
+                    <select
+                      className="form-select form-select-lg border-2"
+                      value={selectedDealerId}
+                      onChange={(e) => setSelectedDealerId(Number(e.target.value))}
+                      required
+                    >
+                      {dealers.map((d) => (
+                        <option key={d.dealerId} value={d.dealerId}>
+                          {d.showroomName || `Showroom #${d.dealerId}`} ({d.city || "Authorized Showroom"})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
 
                 <div className="mb-3">
                   <label className="form-label fw-semibold">Preferred Date</label>

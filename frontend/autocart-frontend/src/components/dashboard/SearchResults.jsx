@@ -53,7 +53,9 @@ function SearchResults({ searchTerm }) {
   };
 
   const openVehicle = (variantId) => {
-    navigate(`/vehicle/${variantId}`);
+    const matched = filteredVehicles.find((v) => v.variantId === variantId);
+    const modelId = matched?.modelId || variantId;
+    navigate(`/models/${modelId}`);
   };
 
   return (

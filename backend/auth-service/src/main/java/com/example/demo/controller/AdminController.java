@@ -28,29 +28,43 @@ public class AdminController {
 
     private final AdminAuthService adminAuthService;
     private final AuthService authService;
+    private final com.example.demo.security.LoginAttemptLimiter loginAttemptLimiter;
 
-    public AdminController(AdminAuthService adminAuthService, AuthService authService) {
+    public AdminController(AdminAuthService adminAuthService, AuthService authService, com.example.demo.security.LoginAttemptLimiter loginAttemptLimiter) {
         this.adminAuthService = adminAuthService;
         this.authService = authService;
+        this.loginAttemptLimiter = loginAttemptLimiter;
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(
-            @Valid @RequestBody AdminLoginRequest request) {
+            @Valid @RequestBody AdminLoginRequest request,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
 
-        AuthResponse response = adminAuthService.login(request);
+        String email = request.getEmail();
+        if (loginAttemptLimiter.isBlocked(httpRequest, email)) {
+            throw new com.example.demo.exception.RateLimitExceededException("Too many failed login attempts. Please try again after 15 minutes.");
+        }
 
-        ResponseCookie cookie = ResponseCookie.from("jwt", response.getToken())
-                .httpOnly(true)
-                .secure(cookieSecure)
-                .path("/")
-                .sameSite("Lax")
-                .maxAge(60 * 60 * 24)
-                .build();
+        try {
+            AuthResponse response = adminAuthService.login(request);
+            loginAttemptLimiter.reset(httpRequest, email);
 
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(response);
+            ResponseCookie cookie = ResponseCookie.from("jwt", response.getToken())
+                    .httpOnly(true)
+                    .secure(cookieSecure)
+                    .path("/")
+                    .sameSite("Lax")
+                    .maxAge(60 * 60 * 24)
+                    .build();
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                    .body(response);
+        } catch (Exception e) {
+            loginAttemptLimiter.recordFailure(httpRequest, email);
+            throw e;
+        }
     }
 
     @GetMapping("/dealers/pending")
@@ -58,10 +72,6 @@ public class AdminController {
         return ResponseEntity.ok(authService.getPendingDealers());
     }
 
-    @GetMapping("/dealers")
-    public ResponseEntity<List<DealerDetailResponse>> getAllDealers() {
-        return ResponseEntity.ok(authService.getAllDealers());
-    }
 
     @PutMapping("/dealers/{dealerId}/status")
     public ResponseEntity<String> updateDealerStatus(

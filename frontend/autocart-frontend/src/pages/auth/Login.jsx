@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { setUser } from "../../redux/slices/authSlice";
 import { loginUser, getCurrentUser, forgotPassword } from "../../services/authService";
@@ -21,6 +21,7 @@ function Login() {
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
@@ -66,7 +67,13 @@ function Login() {
         dispatch(setUser(user));
       }
 
-      navigate("/dashboard");
+      const destination = location.state?.from || "/dashboard";
+      const checkoutState = location.state?.checkoutState;
+      if (destination === "/payment" && checkoutState) {
+        navigate("/payment", { state: checkoutState, replace: true });
+      } else {
+        navigate(destination, { replace: true });
+      }
     } catch (err) {
       setError(err.message || "Login failed. Please check your credentials.");
     } finally {

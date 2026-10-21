@@ -24,11 +24,16 @@ import java.util.Map;
 @RequestMapping("/api/transaction")
 public class TransactionController {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TransactionController.class);
+
     private final BankPartnerRepository bankPartnerRepository;
     private final EmiProductRepository emiProductRepository;
     private final CardOfferRepository cardOfferRepository;
     private final PurchaseEnquiryRepository purchaseEnquiryRepository;
     private final JdbcTemplate jdbcTemplate;
+
+    @Autowired(required = false)
+    private org.springframework.web.client.RestTemplate restTemplate;
 
     public TransactionController(
             BankPartnerRepository bankPartnerRepository,
@@ -83,15 +88,28 @@ public class TransactionController {
             return ResponseEntity.badRequest().body(Map.of("error", "Inventory ID is required to place purchase enquiry"));
         }
 
-        // 1. Resolve and verify dealerId directly from the dealer_inventory listing (LOGIC-03)
+        // 1. Resolve and verify dealerId directly via BUSINESS-SERVICE REST API
         Long inventoryDealerId = null;
-        if (jdbcTemplate != null) {
+        Map<String, Object> invSummary = null;
+        if (restTemplate != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> fetched = restTemplate.getForObject(
+                        "http://BUSINESS-SERVICE/api/internal/inventory/" + request.getInventoryId() + "/summary",
+                        Map.class
+                );
+                invSummary = fetched;
+                if (invSummary != null && invSummary.get("dealerId") != null) {
+                    inventoryDealerId = ((Number) invSummary.get("dealerId")).longValue();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (inventoryDealerId == null && jdbcTemplate != null) {
             try {
                 inventoryDealerId = jdbcTemplate.queryForObject(
                         "SELECT dealer_id FROM dealer_inventory WHERE id = ?", Long.class, request.getInventoryId());
-            } catch (org.springframework.dao.EmptyResultDataAccessException e) {
-                return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST)
-                        .body(Map.of("error", "Selected vehicle inventory listing does not exist or is unavailable."));
+            } catch (org.springframework.dao.EmptyResultDataAccessException ignored) {
             }
         }
         if (inventoryDealerId == null) {
@@ -105,9 +123,29 @@ public class TransactionController {
                     .body(Map.of("error", "Mismatched dealer ID for selected inventory listing."));
         }
 
-        // 2. Atomic stock decrement (LOGIC-01): decrement only if units_available > 0
-        // Do NOT wrap in catch that returns a response so unexpected errors propagate and trigger transaction rollback
-        if (jdbcTemplate != null) {
+        // 2. Atomic stock decrement: decrement only if units_available > 0
+        boolean stockDecrementedViaRest = false;
+        if (restTemplate != null) {
+            try {
+                org.springframework.http.ResponseEntity<Map> decResp = restTemplate.exchange(
+                        "http://BUSINESS-SERVICE/api/internal/inventory/" + request.getInventoryId() + "/decrement-stock",
+                        org.springframework.http.HttpMethod.PUT,
+                        null,
+                        Map.class
+                );
+                if (decResp.getStatusCode().is2xxSuccessful()) {
+                    stockDecrementedViaRest = true;
+                }
+            } catch (org.springframework.web.client.HttpStatusCodeException sce) {
+                if (sce.getStatusCode().value() == 409) {
+                    return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST)
+                            .body(Map.of("error", "Vehicle is currently out of stock or inventory listing is unavailable."));
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (!stockDecrementedViaRest && jdbcTemplate != null) {
             int rowsUpdated = jdbcTemplate.update(
                     "UPDATE dealer_inventory SET units_available = units_available - 1 WHERE id = ? AND units_available > 0",
                     request.getInventoryId()
@@ -122,24 +160,108 @@ public class TransactionController {
             );
         }
 
-        // 3. Save purchase enquiry in the same transactional boundary
-        PurchaseEnquiry enquiry = new PurchaseEnquiry();
-        enquiry.setUserId(authenticatedUserId);
-        enquiry.setDealerId(inventoryDealerId);
-        enquiry.setInventoryId(request.getInventoryId());
-        enquiry.setSelectedColour(request.getSelectedColour());
-        enquiry.setFinancePreference(request.getFinancePreference() != null ? request.getFinancePreference() : "CASH");
-        enquiry.setEmiProductId(request.getEmiProductId());
-        enquiry.setCardOfferId(request.getCardOfferId());
-        enquiry.setCardOfferApplied(request.getCardOfferApplied());
-        enquiry.setFinalPriceShown(request.getFinalPriceShown());
+        // 3. Server-side price calculation: Ground truth calculation ignoring client finalPriceShown
+        java.math.BigDecimal listedPrice = null;
+        java.math.BigDecimal dealerDiscount = java.math.BigDecimal.ZERO;
 
-        // 4. Server-side payment simulation (LOGIC-02): Ignore client's paymentStatus and transactionId
-        // Simulates a real payment gateway callback confirming payment
-        enquiry.setTransactionId("TXN-" + java.util.UUID.randomUUID());
-        enquiry.setPaymentStatus("PAID");
+        if (invSummary != null) {
+            if (invSummary.get("listedPrice") != null) {
+                listedPrice = new java.math.BigDecimal(invSummary.get("listedPrice").toString());
+            }
+            if (invSummary.get("discountAmount") != null) {
+                dealerDiscount = new java.math.BigDecimal(invSummary.get("discountAmount").toString());
+            }
+        }
+        if (listedPrice == null && jdbcTemplate != null) {
+            try {
+                Map<String, Object> row = jdbcTemplate.queryForMap(
+                        "SELECT listed_price, discount_amount FROM dealer_inventory WHERE id = ?", request.getInventoryId());
+                if (row.get("listed_price") != null) {
+                    listedPrice = new java.math.BigDecimal(row.get("listed_price").toString());
+                }
+                if (row.get("discount_amount") != null) {
+                    dealerDiscount = new java.math.BigDecimal(row.get("discount_amount").toString());
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (listedPrice == null) {
+            listedPrice = java.math.BigDecimal.ZERO;
+        }
 
-        PurchaseEnquiry saved = purchaseEnquiryRepository.save(enquiry);
+        java.math.BigDecimal dealerBasePrice = listedPrice.subtract(dealerDiscount);
+        if (dealerBasePrice.compareTo(java.math.BigDecimal.ZERO) < 0) {
+            dealerBasePrice = java.math.BigDecimal.ZERO;
+        }
+
+        java.math.BigDecimal cardDiscount = java.math.BigDecimal.ZERO;
+        String appliedOfferDescription = null;
+
+        if (request.getCardOfferId() != null) {
+            CardOffer offer = cardOfferRepository.findById(request.getCardOfferId()).orElse(null);
+            if (offer != null) {
+                java.math.BigDecimal minTxn = offer.getMinTransaction() != null ? offer.getMinTransaction() : java.math.BigDecimal.ZERO;
+                if (dealerBasePrice.compareTo(minTxn) >= 0 && offer.getDiscountPercent() != null) {
+                    java.math.BigDecimal rawDiscount = dealerBasePrice
+                            .multiply(java.math.BigDecimal.valueOf(offer.getDiscountPercent()))
+                            .divide(java.math.BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                    java.math.BigDecimal cap = offer.getMaxDiscountCap() != null ? offer.getMaxDiscountCap() : java.math.BigDecimal.valueOf(25000);
+                    cardDiscount = rawDiscount.min(cap);
+                    appliedOfferDescription = offer.getDescription();
+                }
+            }
+        }
+
+        java.math.BigDecimal serverFinalPrice = dealerBasePrice.subtract(cardDiscount);
+        if (serverFinalPrice.compareTo(java.math.BigDecimal.ZERO) < 0) {
+            serverFinalPrice = java.math.BigDecimal.ZERO;
+        }
+
+        // 4. Save purchase enquiry with atomic compensation rollback if saving fails
+        PurchaseEnquiry saved;
+        try {
+            PurchaseEnquiry enquiry = new PurchaseEnquiry();
+            enquiry.setUserId(authenticatedUserId);
+            enquiry.setDealerId(inventoryDealerId);
+            enquiry.setInventoryId(request.getInventoryId());
+            enquiry.setSelectedColour(request.getSelectedColour());
+            enquiry.setFinancePreference(request.getFinancePreference() != null ? request.getFinancePreference() : "CASH");
+            
+            if ("EMI".equalsIgnoreCase(request.getFinancePreference()) && request.getEmiProductId() != null) {
+                EmiProduct emi = emiProductRepository.findById(request.getEmiProductId()).orElse(null);
+                enquiry.setEmiProductId(emi != null ? emi.getId() : null);
+            } else {
+                enquiry.setEmiProductId(null);
+            }
+
+            enquiry.setCardOfferId(request.getCardOfferId());
+            enquiry.setCardOfferApplied(appliedOfferDescription);
+            enquiry.setFinalPriceShown(serverFinalPrice);
+
+            // Server-side payment simulation: Ignore client's paymentStatus and transactionId
+            enquiry.setTransactionId("TXN-" + java.util.UUID.randomUUID());
+            enquiry.setPaymentStatus("PAID");
+            enquiry.setStockReleased(false);
+
+            // Stored snapshot at creation
+            hydrateCustomerInfo(enquiry);
+
+            saved = purchaseEnquiryRepository.save(enquiry);
+        } catch (Exception ex) {
+            // Compensating rollback: restore decremented stock if enquiry persist fails
+            if (stockDecrementedViaRest && restTemplate != null) {
+                try {
+                    restTemplate.put("http://BUSINESS-SERVICE/api/internal/inventory/" + request.getInventoryId() + "/increment-stock", null);
+                } catch (Exception ignored) {
+                }
+            } else if (jdbcTemplate != null) {
+                try {
+                    jdbcTemplate.update("UPDATE dealer_inventory SET units_available = units_available + 1 WHERE id = ?", request.getInventoryId());
+                } catch (Exception ignored) {
+                }
+            }
+            throw ex;
+        }
 
         hydrateCustomerInfo(saved);
         return ResponseEntity.ok(saved);
@@ -193,8 +315,30 @@ public class TransactionController {
     }
 
     private void hydrateCustomerInfo(PurchaseEnquiry enquiry) {
-        if (jdbcTemplate != null) {
-            if (enquiry.getUserId() != null) {
+        if (enquiry == null) return;
+
+        // 1. Customer User details via AUTH-SERVICE REST API
+        if (enquiry.getUserId() != null) {
+            boolean userHydrated = false;
+            if (restTemplate != null) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> uMap = restTemplate.getForObject(
+                            "http://AUTH-SERVICE/api/internal/users/" + enquiry.getUserId(),
+                            Map.class
+                    );
+                    if (uMap != null) {
+                        String fn = uMap.get("firstName") != null ? uMap.get("firstName").toString() : "";
+                        String ln = uMap.get("lastName") != null ? uMap.get("lastName").toString() : "";
+                        String mob = uMap.get("mobile") != null ? uMap.get("mobile").toString() : "";
+                        enquiry.setCustomerName((fn + " " + ln).trim());
+                        enquiry.setCustomerMobile(mob);
+                        userHydrated = true;
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (!userHydrated && jdbcTemplate != null) {
                 try {
                     Map<String, Object> row = jdbcTemplate.queryForMap(
                             "SELECT first_name, last_name, mobile FROM users WHERE id = ?",
@@ -208,7 +352,26 @@ public class TransactionController {
                 } catch (Exception ignored) {
                 }
             }
-            if (enquiry.getDealerId() != null) {
+        }
+
+        // 2. Showroom details via AUTH-SERVICE REST API
+        if (enquiry.getDealerId() != null) {
+            boolean dealerHydrated = false;
+            if (restTemplate != null) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> dMap = restTemplate.getForObject(
+                            "http://AUTH-SERVICE/api/internal/dealers/" + enquiry.getDealerId(),
+                            Map.class
+                    );
+                    if (dMap != null && dMap.get("showroomName") != null) {
+                        enquiry.setShowroomName((String) dMap.get("showroomName"));
+                        dealerHydrated = true;
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (!dealerHydrated && jdbcTemplate != null) {
                 try {
                     Map<String, Object> dRow = jdbcTemplate.queryForMap(
                             "SELECT showroom_name FROM dealers WHERE id = ?",
@@ -221,7 +384,30 @@ public class TransactionController {
                 } catch (Exception ignored) {
                 }
             }
-            if (enquiry.getInventoryId() != null) {
+        }
+
+        // 3. Vehicle / Variant details via BUSINESS-SERVICE REST API
+        if (enquiry.getInventoryId() != null) {
+            boolean vehicleHydrated = false;
+            if (restTemplate != null) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> invSummary = restTemplate.getForObject(
+                            "http://BUSINESS-SERVICE/api/internal/inventory/" + enquiry.getInventoryId() + "/summary",
+                            Map.class
+                    );
+                    if (invSummary != null) {
+                        String bName = invSummary.get("brandName") != null ? invSummary.get("brandName").toString() : "";
+                        String mName = invSummary.get("modelName") != null ? invSummary.get("modelName").toString() : "";
+                        String vName = invSummary.get("variantName") != null ? invSummary.get("variantName").toString() : "";
+                        enquiry.setCarModelName((bName + " " + mName).trim());
+                        enquiry.setVariantName(vName);
+                        vehicleHydrated = true;
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (!vehicleHydrated && jdbcTemplate != null) {
                 try {
                     Map<String, Object> iRow = jdbcTemplate.queryForMap(
                             "SELECT b.name as brand_name, m.name as model_name, v.variant_name " +
@@ -282,7 +468,20 @@ public class TransactionController {
             }
 
             Long authenticatedDealerId = null;
-            if (jdbcTemplate != null) {
+            if (restTemplate != null) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> dMap = restTemplate.getForObject(
+                            "http://AUTH-SERVICE/api/internal/dealers/user/" + authenticatedUserId,
+                            Map.class
+                    );
+                    if (dMap != null && dMap.get("dealerId") != null) {
+                        authenticatedDealerId = ((Number) dMap.get("dealerId")).longValue();
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (authenticatedDealerId == null && jdbcTemplate != null) {
                 try {
                     authenticatedDealerId = jdbcTemplate.queryForObject(
                             "SELECT id FROM dealers WHERE user_id = ?", Long.class, authenticatedUserId);
@@ -338,7 +537,20 @@ public class TransactionController {
             }
 
             Long authenticatedDealerId = null;
-            if (jdbcTemplate != null) {
+            if (restTemplate != null) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> dMap = restTemplate.getForObject(
+                            "http://AUTH-SERVICE/api/internal/dealers/user/" + authenticatedUserId,
+                            Map.class
+                    );
+                    if (dMap != null && dMap.get("dealerId") != null) {
+                        authenticatedDealerId = ((Number) dMap.get("dealerId")).longValue();
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (authenticatedDealerId == null && jdbcTemplate != null) {
                 try {
                     authenticatedDealerId = jdbcTemplate.queryForObject(
                             "SELECT id FROM dealers WHERE user_id = ?", Long.class, authenticatedUserId);
@@ -352,41 +564,51 @@ public class TransactionController {
             }
         }
 
-        String previousStatus = enquiry.getStatus();
+        String currentStatus = enquiry.getStatus() != null ? enquiry.getStatus().toUpperCase() : "PENDING";
+        if (List.of("COMPLETED", "REJECTED", "CANCELLED").contains(currentStatus)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Cannot update enquiry in terminal state: " + currentStatus));
+        }
+
+        if ("PROCESSED".equals(currentStatus) && !List.of("COMPLETED", "CANCELLED", "REJECTED").contains(status)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Invalid state transition from PROCESSED to " + status));
+        }
+
+        // BIZ-02: Restore inventory stock BEFORE saving status change (checked with stock_released flag)
+        boolean isNewStatusCancelledOrRejected = "CANCELLED".equals(status) || "REJECTED".equals(status);
+
+        if (enquiry.getInventoryId() != null && isNewStatusCancelledOrRejected && !enquiry.isStockReleased()) {
+            boolean stockRestored = false;
+            if (restTemplate != null) {
+                try {
+                    restTemplate.put("http://BUSINESS-SERVICE/api/internal/inventory/" + enquiry.getInventoryId() + "/increment-stock", null);
+                    stockRestored = true;
+                } catch (Exception ex) {
+                    log.error("Failed to restore inventory stock via REST", ex);
+                }
+            }
+            if (!stockRestored && jdbcTemplate != null) {
+                try {
+                    jdbcTemplate.update("UPDATE dealer_inventory SET units_available = units_available + 1 WHERE id = ?", enquiry.getInventoryId());
+                    jdbcTemplate.update("UPDATE dealer_inventory SET listing_status = 'AVAILABLE' WHERE id = ? AND units_available > 0", enquiry.getInventoryId());
+                    stockRestored = true;
+                } catch (Exception ex) {
+                    log.error("Failed to restore inventory stock via JDBC", ex);
+                }
+            }
+            if (!stockRestored) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(Map.of("error", "Failed to update inventory stock. Status change aborted."));
+            }
+            enquiry.setStockReleased(true);
+        }
+
         enquiry.setStatus(status);
         PurchaseEnquiry saved = purchaseEnquiryRepository.save(enquiry);
 
-        boolean isNewStatusCancelled = "CANCELLED".equalsIgnoreCase(status) || "REJECTED".equalsIgnoreCase(status);
-        boolean wasPreviouslyCancelled = "CANCELLED".equalsIgnoreCase(previousStatus) || "REJECTED".equalsIgnoreCase(previousStatus);
-
-        if (jdbcTemplate != null && enquiry.getInventoryId() != null) {
-            if (isNewStatusCancelled && !wasPreviouslyCancelled) {
-                try {
-                    jdbcTemplate.update(
-                            "UPDATE dealer_inventory SET units_available = units_available + 1 WHERE id = ?",
-                            enquiry.getInventoryId()
-                    );
-                    jdbcTemplate.update(
-                            "UPDATE dealer_inventory SET listing_status = 'AVAILABLE' WHERE id = ? AND units_available > 0",
-                            enquiry.getInventoryId()
-                    );
-                } catch (Exception ignored) {
-                }
-            } else if (!isNewStatusCancelled && wasPreviouslyCancelled) {
-                try {
-                    jdbcTemplate.update(
-                            "UPDATE dealer_inventory SET units_available = GREATEST(0, units_available - 1) WHERE id = ?",
-                            enquiry.getInventoryId()
-                    );
-                    jdbcTemplate.update(
-                            "UPDATE dealer_inventory SET listing_status = 'OUT_OF_STOCK' WHERE id = ? AND units_available <= 0",
-                            enquiry.getInventoryId()
-                    );
-                } catch (Exception ignored) {
-                }
-            }
-        }
-
+        // DATA-01: Call hydrateCustomerInfo before returning
+        hydrateCustomerInfo(saved);
         return ResponseEntity.ok(saved);
     }
 

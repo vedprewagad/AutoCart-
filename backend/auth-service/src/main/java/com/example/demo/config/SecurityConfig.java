@@ -25,10 +25,11 @@ import com.example.demo.security.JwtAuthenticationFilter;
 public class SecurityConfig {
 
 	private final JwtAuthenticationFilter jwtAuthenticationFilter;
+	private final InternalTokenFilter internalTokenFilter;
 
-	public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
-
+	public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, InternalTokenFilter internalTokenFilter) {
 		this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+		this.internalTokenFilter = internalTokenFilter;
 	}
 
 	@Bean
@@ -51,7 +52,7 @@ public class SecurityConfig {
 						.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
 				.authorizeHttpRequests(auth -> auth
 
-						.requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/forgot-password", "/api/auth/reset-password", "/api/admin/login").permitAll()
+						.requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/forgot-password", "/api/auth/reset-password", "/api/admin/login", "/api/internal/**").permitAll()
 
 						.requestMatchers("/api/admin/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
 
@@ -60,6 +61,7 @@ public class SecurityConfig {
 
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
+				.addFilterBefore(internalTokenFilter, UsernamePasswordAuthenticationFilter.class)
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();

@@ -226,6 +226,7 @@ public class AuthService {
 		return "Registration successful";
 	}
 
+	@Transactional(readOnly = true)
 	public List<DealerDetailResponse> getPendingDealers() {
 		return dealerRepository.findByStatus(DealerStatus.PENDING).stream().map(dealer -> {
 			DealerDetailResponse dto = new DealerDetailResponse();
@@ -255,6 +256,7 @@ public class AuthService {
 		}).collect(Collectors.toList());
 	}
 
+	@Transactional(readOnly = true)
 	public List<DealerDetailResponse> getAllDealers() {
 		return dealerRepository.findAll().stream().map(dealer -> {
 			DealerDetailResponse dto = new DealerDetailResponse();
@@ -584,8 +586,8 @@ public class AuthService {
 		if (request.getToken() == null || request.getToken().isBlank()) {
 			throw new IllegalArgumentException("Reset token is required");
 		}
-		if (request.getNewPassword() == null || request.getNewPassword().length() < 6) {
-			throw new IllegalArgumentException("New password must be at least 6 characters");
+		if (request.getNewPassword() == null || request.getNewPassword().length() < 8) {
+			throw new IllegalArgumentException("New password must be at least 8 characters");
 		}
 
 		User user = userRepository.findByResetToken(request.getToken())

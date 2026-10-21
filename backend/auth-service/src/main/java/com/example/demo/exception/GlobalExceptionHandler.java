@@ -55,6 +55,23 @@ public class GlobalExceptionHandler {
                 .body(response);
     }
 
+    // Rate Limit Exceeded (HTTP 429)
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleRateLimitExceeded(
+            RateLimitExceededException ex) {
+
+        ErrorResponse response =
+                new ErrorResponse(
+                        LocalDateTime.now(),
+                        HttpStatus.TOO_MANY_REQUESTS.value(),
+                        ex.getMessage()
+                );
+
+        return ResponseEntity
+                .status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(response);
+    }
+
     // Application RuntimeExceptions
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntimeException(

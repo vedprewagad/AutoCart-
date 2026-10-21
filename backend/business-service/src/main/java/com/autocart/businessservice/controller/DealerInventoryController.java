@@ -37,6 +37,9 @@ public class DealerInventoryController {
     private final JdbcTemplate jdbcTemplate;
     private final JwtService jwtService;
 
+    @Autowired(required = false)
+    private org.springframework.web.client.RestTemplate restTemplate;
+
     public DealerInventoryController(
             DealerInventoryRepository inventoryRepository,
             DealerOfferRepository offerRepository,
@@ -274,6 +277,19 @@ public class DealerInventoryController {
     }
 
     private Long resolveDealerId(Long userId) {
+        if (userId != null && restTemplate != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> dMap = restTemplate.getForObject(
+                        "http://AUTH-SERVICE/api/internal/dealers/user/" + userId,
+                        Map.class
+                );
+                if (dMap != null && dMap.get("dealerId") != null) {
+                    return ((Number) dMap.get("dealerId")).longValue();
+                }
+            } catch (Exception ignored) {
+            }
+        }
         if (userId != null && jdbcTemplate != null) {
             try {
                 return jdbcTemplate.queryForObject(

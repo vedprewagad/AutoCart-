@@ -16,21 +16,27 @@ Before running the platform, ensure you have the following installed:
 
 ## 2. Database Setup
 
-1. Start your local MySQL service.
-2. Create the platform database and load the schema and catalogue data:
+AutoCart uses microservice-segregated databases with automatic Flyway migrations on startup:
+- **`autocart_auth`** — User credentials, role RBAC, dealer profile onboarding, and franchise authorizations.
+- **`autocart_business`** — Vehicle catalogue, inventory listings, dealer offers, test drive bookings, and dealer reviews.
+- **`autocart_transaction`** — Bank partners, EMI loan configurations, card offers, and vehicle purchase enquiries.
 
+### Option A: Fresh Setup with Automatic Flyway Migrations (Recommended)
+1. Start local MySQL.
+2. Create the 3 service databases:
 ```bash
-# Log into MySQL CLI or run these commands:
-mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS autocart_db CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
-
-# Load schema (17 core tables)
-mysql -u root -p autocart_db < database/schema.sql
-
-# Load catalogue data (brands, models, variants, images, colours, banking & offers)
-mysql -u root -p autocart_db < database/catalogue_data.sql
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS autocart_auth CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS autocart_business CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS autocart_transaction CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
 ```
+When each backend service starts, Flyway automatically runs its migration script (`V1__init_auth_schema.sql`, `V1__init_business_schema.sql`, `V1__init_transaction_schema.sql`) and seeds required initial data.
 
-> **Note on Initial Accounts:** Initial user accounts are not in the catalogue dump. When `auth-service` starts for the first time, its database initializers (`AdminInitializer`, `DealerInitializer`, and `CustomerInitializer`) automatically create the seeded demo accounts in `autocart_db`.
+### Option B: Migrate Existing Single Database (`autocart_db`)
+If migrating from an existing `autocart_db` instance:
+```bash
+mysql -u root -p < database/split_migration.sql
+```
+This populates `autocart_auth`, `autocart_business`, and `autocart_transaction` while leaving `autocart_db` untouched as a rollback copy.
 
 ---
 

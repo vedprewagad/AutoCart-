@@ -48,5 +48,7 @@ public interface CarVariantRepository extends JpaRepository<CarVariant, Long> {
                                      @Param("maxPrice") BigDecimal maxPrice,
                                      @Param("transmission") String transmission);
 
+    List<CarVariant> findByModelId(Long modelId);
+
     void deleteByModelId(Long modelId);
 }

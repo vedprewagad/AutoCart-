@@ -56,18 +56,21 @@ public class PurchaseEnquiry {
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Transient
+    @Column(name = "stock_released", nullable = false)
+    private boolean stockReleased = false;
+
+    @Column(name = "customer_name", length = 100)
     private String customerName;
 
-    @Transient
+    @Column(name = "customer_mobile", length = 20)
     private String customerMobile;
 
-    @Transient
+    @Column(name = "showroom_name", length = 150)
     private String showroomName;
 
-    @Transient
+    @Column(name = "car_model_name", length = 150)
     private String carModelName;
 
-    @Transient
+    @Column(name = "variant_name", length = 150)
     private String variantName;
 }

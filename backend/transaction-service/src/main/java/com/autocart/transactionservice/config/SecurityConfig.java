@@ -16,9 +16,11 @@ import com.autocart.transactionservice.security.JwtAuthenticationFilter;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
+    private final InternalTokenFilter internalTokenFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, InternalTokenFilter internalTokenFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.internalTokenFilter = internalTokenFilter;
     }
 
     @Bean
@@ -28,11 +30,13 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/api/internal/**").permitAll()
                 .requestMatchers("/api/transaction/admin/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/transaction/banks", "/api/transaction/emi-products", "/api/transaction/card-offers").permitAll()
                 .requestMatchers("/api/transaction/enquiry", "/api/transaction/enquiries/**").authenticated()
                 .anyRequest().authenticated()
             )
+            .addFilterBefore(internalTokenFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

@@ -47,7 +47,7 @@ spring:
         - id: business-service-routes
           uri: lb://BUSINESS-SERVICE
           predicates:
-            - Path=/api/brands/**, /api/models/**, /api/variants/**, /api/vehicles/**, /api/dealer/**, /api/test-drives/**, /api/user-context/**, /api/ratings/**
+            - Path=/api/brands/**, /api/models/**, /api/variants/**, /api/vehicles/**, /api/dealer/**, /api/test-drives/**, /api/ratings/**
 
         # 4. Transaction Service endpoints
         - id: transaction-service-routes

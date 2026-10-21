@@ -1,7 +1,8 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 
 function ProtectedRoute({ children, allowedRoles }) {
+  const location = useLocation();
   const { user, loading } = useSelector((state) => state.auth);
 
   if (loading) {
@@ -18,11 +19,20 @@ function ProtectedRoute({ children, allowedRoles }) {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return (
+      <Navigate
+        to="/login"
+        state={{
+          from: location.pathname,
+          checkoutState: location.state
+        }}
+        replace
+      />
+    );
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   // Dealer accounts awaiting admin approval cannot access the app

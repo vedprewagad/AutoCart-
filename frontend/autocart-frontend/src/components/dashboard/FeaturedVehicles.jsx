@@ -108,11 +108,7 @@ function FeaturedVehicles() {
   };
 
   const openVehicle = (vehicle) => {
-    if (vehicle.modelId) {
-      navigate(`/models/${vehicle.modelId}`);
-    } else {
-      navigate(`/vehicle/${vehicle.variantId}`);
-    }
+    navigate(`/models/${vehicle.modelId || vehicle.variantId}`);
   };
 
   const handleResetFilters = () => {

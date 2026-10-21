@@ -6,7 +6,6 @@ import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 
 import BrandModels from "./pages/customer/BrandModels";
-import VehicleDetails from "./pages/customer/VehicleDetails";
 import VariantSelection from "./pages/customer/VariantSelection";
 
 import Login from "./pages/auth/Login";
@@ -95,11 +94,6 @@ function App() {
         />
 
         <Route
-          path="/vehicle/:variantId"
-          element={<VehicleDetails />}
-        />
-
-        <Route
           path="/models/:modelId"
           element={<VariantSelection />}
         />
@@ -107,7 +101,7 @@ function App() {
         <Route
           path="/payment"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
               <PaymentPage />
             </ProtectedRoute>
           }
@@ -125,7 +119,7 @@ function App() {
         <Route
           path="/my-test-drives"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
               <MyTestDrives />
             </ProtectedRoute>
           }
@@ -134,7 +128,7 @@ function App() {
         <Route
           path="/my-orders"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
               <MyEnquiries />
             </ProtectedRoute>
           }

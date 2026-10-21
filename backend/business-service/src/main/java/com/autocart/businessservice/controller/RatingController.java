@@ -29,8 +29,14 @@ public class RatingController {
     @Autowired
     private RatingRepository ratingRepository;
 
+    @Autowired
+    private com.autocart.businessservice.repository.TestDriveBookingRepository testDriveBookingRepository;
+
     @Autowired(required = false)
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired(required = false)
+    private org.springframework.web.client.RestTemplate restTemplate;
 
     @Autowired
     private JwtService jwtService;
@@ -57,7 +63,35 @@ public class RatingController {
         }
 
         boolean hasEligibleInteraction = false;
-        if (jdbcTemplate != null) {
+        // 1. Check local test drive interactions within business-service
+        try {
+            if (testDriveBookingRepository != null &&
+                testDriveBookingRepository.existsByUserIdAndDealerIdAndStatus(authenticatedUserId, request.getDealerId(), "COMPLETED")) {
+                hasEligibleInteraction = true;
+            }
+        } catch (Exception ignored) {
+        }
+
+        // 2. Check completed purchase enquiries via TRANSACTION-SERVICE REST API
+        if (!hasEligibleInteraction && restTemplate != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> resp = restTemplate.getForObject(
+                        "http://TRANSACTION-SERVICE/api/internal/transactions/enquiries/user/" + authenticatedUserId + "/dealer/" + request.getDealerId() + "/completed-count",
+                        Map.class
+                );
+                if (resp != null && resp.get("count") != null) {
+                    long count = ((Number) resp.get("count")).longValue();
+                    if (count > 0) {
+                        hasEligibleInteraction = true;
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        // 3. Fallback to local query if REST call timed out or during initial migration
+        if (!hasEligibleInteraction && jdbcTemplate != null) {
             try {
                 Integer testDriveCount = jdbcTemplate.queryForObject(
                         "SELECT COUNT(*) FROM test_drive_bookings WHERE user_id = ? AND dealer_id = ? AND status = 'COMPLETED'",
@@ -96,13 +130,23 @@ public class RatingController {
 
         Rating saved = ratingRepository.save(rating);
 
-        // Update overall dealer average rating in dealers table
+        // Update overall dealer average rating in dealers table via AUTH-SERVICE REST API
         Double avgRating = ratingRepository.getAverageRatingForDealer(request.getDealerId());
-        if (avgRating != null && jdbcTemplate != null) {
+        if (avgRating != null) {
             double roundedAvg = Math.round(avgRating * 10.0) / 10.0;
-            try {
-                jdbcTemplate.update("UPDATE dealers SET rating = ? WHERE id = ?", roundedAvg, request.getDealerId());
-            } catch (Exception ignored) {
+            boolean updatedViaRest = false;
+            if (restTemplate != null) {
+                try {
+                    restTemplate.put("http://AUTH-SERVICE/api/internal/dealers/" + request.getDealerId() + "/rating?rating=" + roundedAvg, null);
+                    updatedViaRest = true;
+                } catch (Exception ignored) {
+                }
+            }
+            if (!updatedViaRest && jdbcTemplate != null) {
+                try {
+                    jdbcTemplate.update("UPDATE dealers SET rating = ? WHERE id = ?", roundedAvg, request.getDealerId());
+                } catch (Exception ignored) {
+                }
             }
         }
 
@@ -127,7 +171,20 @@ public class RatingController {
         Long totalCount = ratingRepository.countByDealerId(dealerId);
 
         String showroomName = "Authorized Dealer";
-        if (jdbcTemplate != null) {
+        if (restTemplate != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> dealerMap = restTemplate.getForObject(
+                        "http://AUTH-SERVICE/api/internal/dealers/" + dealerId,
+                        Map.class
+                );
+                if (dealerMap != null && dealerMap.get("showroomName") != null) {
+                    showroomName = (String) dealerMap.get("showroomName");
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if ("Authorized Dealer".equals(showroomName) && jdbcTemplate != null) {
             try {
                 showroomName = jdbcTemplate.queryForObject(
                         "SELECT showroom_name FROM dealers WHERE id = ?",
@@ -202,18 +259,37 @@ public class RatingController {
     }
 
     private String fetchCustomerName(Long userId) {
-        if (jdbcTemplate == null || userId == null) return "Customer #" + userId;
-        try {
-            Map<String, Object> map = jdbcTemplate.queryForMap(
-                    "SELECT first_name, last_name FROM users WHERE id = ?",
-                    userId
-            );
-            String fn = map.get("first_name") != null ? map.get("first_name").toString() : "";
-            String ln = map.get("last_name") != null ? map.get("last_name").toString() : "";
-            return (fn + " " + ln).trim();
-        } catch (Exception e) {
-            return "Customer #" + userId;
+        if (userId == null) return "Customer";
+        if (restTemplate != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> userMap = restTemplate.getForObject(
+                        "http://AUTH-SERVICE/api/internal/users/" + userId,
+                        Map.class
+                );
+                if (userMap != null) {
+                    String fn = userMap.get("firstName") != null ? userMap.get("firstName").toString() : "";
+                    String ln = userMap.get("lastName") != null ? userMap.get("lastName").toString() : "";
+                    String fullName = (fn + " " + ln).trim();
+                    if (!fullName.isEmpty()) return fullName;
+                }
+            } catch (Exception ignored) {
+            }
         }
+        if (jdbcTemplate != null) {
+            try {
+                Map<String, Object> map = jdbcTemplate.queryForMap(
+                        "SELECT first_name, last_name FROM users WHERE id = ?",
+                        userId
+                );
+                String fn = map.get("first_name") != null ? map.get("first_name").toString() : "";
+                String ln = map.get("last_name") != null ? map.get("last_name").toString() : "";
+                return (fn + " " + ln).trim();
+            } catch (Exception e) {
+                return "Customer #" + userId;
+            }
+        }
+        return "Customer #" + userId;
     }
 
     private Long resolveAuthenticatedUserId(HttpServletRequest request) {

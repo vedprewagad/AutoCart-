@@ -20,6 +20,9 @@ function PaymentPage() {
   const [selectedCardId, setSelectedCardId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [createdEnquiry, setCreatedEnquiry] = useState(null);
+  const [financingError, setFinancingError] = useState(null);
+  const [financingLoading, setFinancingLoading] = useState(false);
 
   useEffect(() => {
     if (!variant && !price) {
@@ -45,15 +48,20 @@ function PaymentPage() {
   }, [variant, price, navigate]);
 
   const loadFinancingData = async () => {
+    setFinancingLoading(true);
+    setFinancingError(null);
     try {
       const [emiData, cardData] = await Promise.all([getEmiProducts(), getCardOffers()]);
       setEmiProducts(emiData || []);
       setCardOffers(cardData || []);
       if (emiData && emiData.length > 0) {
-        setSelectedEmiId(emiData[0].id);
+        setSelectedEmiId((prev) => prev || emiData[0].id);
       }
     } catch (err) {
       console.error("Error loading financing data:", err);
+      setFinancingError("Unable to load bank financing plans and card offers. Please check your connection and try again.");
+    } finally {
+      setFinancingLoading(false);
     }
   };
 
@@ -98,7 +106,7 @@ function PaymentPage() {
 
     setSubmitting(true);
     try {
-      await createPurchaseEnquiry({
+      const savedEnquiry = await createPurchaseEnquiry({
         userId: resolvedUserId,
         dealerId: resolvedDealerId,
         inventoryId: resolvedInventoryId,
@@ -110,6 +118,7 @@ function PaymentPage() {
         finalPriceShown: finalNetPrice,
       });
 
+      setCreatedEnquiry(savedEnquiry);
       setSuccessMessage("Purchase Enquiry submitted successfully! Dealer representative will contact you for documentation & delivery.");
     } catch (err) {
       console.error(err);
@@ -131,6 +140,10 @@ function PaymentPage() {
   }
 
   if (successMessage) {
+    const displayFinalPrice = createdEnquiry?.finalPriceShown != null
+      ? Number(createdEnquiry.finalPriceShown)
+      : finalNetPrice;
+
     return (
       <div className="container py-5 text-center">
         <div className="card max-w-lg mx-auto border-0 shadow-lg rounded-4 p-5">
@@ -142,7 +155,12 @@ function PaymentPage() {
             <div><strong>Vehicle:</strong> {variant?.variantName || "Vehicle details unavailable"}</div>
             <div><strong>Selected Colour:</strong> {selectedColour}</div>
             <div><strong>Financing Option:</strong> {financeType}</div>
-            <div><strong>Final Net Price:</strong> ₹ {finalNetPrice.toLocaleString("en-IN")}</div>
+            <div><strong>Final Net Price:</strong> ₹ {displayFinalPrice.toLocaleString("en-IN")}</div>
+            {createdEnquiry?.transactionId && (
+              <div className="mt-2 pt-2 border-top">
+                <small className="text-muted">Transaction Reference: <code className="text-primary">{createdEnquiry.transactionId}</code></small>
+              </div>
+            )}
           </div>
           <button className="btn btn-primary btn-lg fw-bold px-5" onClick={() => navigate("/dashboard")}>
             Return to Dashboard
@@ -161,6 +179,33 @@ function PaymentPage() {
       </div>
 
       <h1 className="fw-bold display-6 mb-4">Final Price & Financing Options</h1>
+
+      {financingError && (
+        <div className="alert alert-danger d-flex align-items-center justify-content-between rounded-4 shadow-sm mb-4 p-3" role="alert">
+          <div className="d-flex align-items-center gap-2">
+            <span className="fs-4">⚠️</span>
+            <div>
+              <div className="fw-bold">Failed to load financing data</div>
+              <div className="small text-danger-emphasis">{financingError}</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-danger btn-sm fw-bold px-3 py-2 rounded-3"
+            onClick={loadFinancingData}
+            disabled={financingLoading}
+          >
+            {financingLoading ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                Retrying...
+              </>
+            ) : (
+              "Retry"
+            )}
+          </button>
+        </div>
+      )}
 
       <div className="row g-4">
         {/* LEFT COLUMN: FINANCING & CARD OFFERS */}

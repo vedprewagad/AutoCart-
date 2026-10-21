@@ -123,25 +123,39 @@ function DealerDashboard() {
     }
   };
 
+  const parseCurrencyNumber = (val) => {
+    if (val === null || val === undefined) return 0;
+    if (typeof val === "number") return isNaN(val) ? 0 : val;
+    const clean = String(val).replace(/[₹\s,a-zA-Z]/g, "").trim();
+    const parsed = Number(clean);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
   const handleAddStock = async (e) => {
     e.preventDefault();
     if (!user?.dealerId) {
       setMessage("Error: Dealer profile ID is missing. Please log in again.");
       return;
     }
-    if (Number(listedPrice) <= 0) {
+
+    const cleanPrice = parseCurrencyNumber(listedPrice);
+    const cleanDiscount = parseCurrencyNumber(discountAmount);
+    const cleanUnits = parseInt(String(unitsAvailable).replace(/\D/g, ""), 10) || 0;
+    const cleanDays = parseInt(String(deliveryDays).replace(/\D/g, ""), 10) || 0;
+
+    if (cleanPrice <= 0) {
       setMessage("Error: Listed price must be a positive amount.");
       return;
     }
-    if (Number(discountAmount) < 0) {
+    if (cleanDiscount < 0) {
       setMessage("Error: Discount amount cannot be negative.");
       return;
     }
-    if (Number(unitsAvailable) <= 0) {
+    if (cleanUnits <= 0) {
       setMessage("Error: Available units must be at least 1.");
       return;
     }
-    if (Number(deliveryDays) <= 0) {
+    if (cleanDays <= 0) {
       setMessage("Error: Estimated delivery days must be at least 1.");
       return;
     }
@@ -152,11 +166,11 @@ function DealerDashboard() {
       await addDealerInventory({
         dealerId: activeDealerId,
         variantId: Number(selectedVariantId),
-        listedPrice: Number(listedPrice),
-        discountAmount: Number(discountAmount || 0),
+        listedPrice: cleanPrice,
+        discountAmount: cleanDiscount,
         discountType: "FLAT",
-        unitsAvailable: Number(unitsAvailable),
-        deliveryDays: Number(deliveryDays),
+        unitsAvailable: cleanUnits,
+        deliveryDays: cleanDays,
         offers: offerDescription ? [{ offerType: "FESTIVE", offerDescription }] : [],
       });
 

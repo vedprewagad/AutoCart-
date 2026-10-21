@@ -15,5 +15,7 @@ public interface DealerRepository extends JpaRepository<Dealer, Long> {
 
     Optional<Dealer> findByUser(User user);
 
+    Optional<Dealer> findByUserId(Long userId);
+
     List<Dealer> findByStatus(DealerStatus status);
 }
