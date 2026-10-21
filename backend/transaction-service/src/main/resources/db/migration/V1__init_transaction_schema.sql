@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS `emi_products` (
 CREATE TABLE IF NOT EXISTS `card_offers` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `bank_id` bigint NOT NULL,
-  `card_type` enum('CREDIT','DEBIT') NOT NULL,
+  `card_type` varchar(20) NOT NULL,
   `card_network` varchar(50) DEFAULT NULL,
   `discount_percent` float DEFAULT NULL,
   `max_discount_cap` decimal(10,2) DEFAULT NULL,
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS `purchase_enquiries` (
   `card_offer_id` bigint DEFAULT NULL,
   `card_offer_applied` varchar(255) DEFAULT NULL,
   `final_price_shown` decimal(12,2) DEFAULT NULL,
-  `status` varchar(50) NOT NULL DEFAULT 'PENDING',
+  `status` varchar(20) NOT NULL DEFAULT 'PENDING',
   `payment_status` varchar(50) DEFAULT 'UNPAID',
   `transaction_id` varchar(100) DEFAULT NULL,
   `stock_released` tinyint(1) NOT NULL DEFAULT 0,
