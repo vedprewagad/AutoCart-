@@ -109,7 +109,7 @@ public class TransactionController {
             try {
                 inventoryDealerId = jdbcTemplate.queryForObject(
                         "SELECT dealer_id FROM dealer_inventory WHERE id = ?", Long.class, request.getInventoryId());
-            } catch (org.springframework.dao.EmptyResultDataAccessException ignored) {
+            } catch (Exception ignored) {
             }
         }
         if (inventoryDealerId == null) {
@@ -121,6 +121,12 @@ public class TransactionController {
         if (request.getDealerId() != null && !request.getDealerId().equals(inventoryDealerId)) {
             return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", "Mismatched dealer ID for selected inventory listing."));
+        }
+
+        // Reject if cardOfferId is specified but does not exist
+        if (request.getCardOfferId() != null && !cardOfferRepository.existsById(request.getCardOfferId())) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Selected card offer does not exist or is invalid."));
         }
 
         // 2. Atomic stock decrement: decrement only if units_available > 0
@@ -141,23 +147,22 @@ public class TransactionController {
                     return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST)
                             .body(Map.of("error", "Vehicle is currently out of stock or inventory listing is unavailable."));
                 }
-            } catch (Exception ignored) {
+                // Other HTTP error from business-service — treat as unavailable
+                log.error("Business-service returned HTTP {} during stock decrement", sce.getStatusCode().value(), sce);
+                return ResponseEntity.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(Map.of("error", "Inventory service is currently unavailable. Please retry your purchase."));
+            } catch (Exception ex) {
+                // Network / timeout — business-service unreachable
+                log.error("Could not reach business-service for stock decrement", ex);
+                return ResponseEntity.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(Map.of("error", "Inventory service is currently unavailable. Please retry your purchase."));
             }
         }
 
-        if (!stockDecrementedViaRest && jdbcTemplate != null) {
-            int rowsUpdated = jdbcTemplate.update(
-                    "UPDATE dealer_inventory SET units_available = units_available - 1 WHERE id = ? AND units_available > 0",
-                    request.getInventoryId()
-            );
-            if (rowsUpdated == 0) {
-                return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST)
-                        .body(Map.of("error", "Vehicle is currently out of stock or inventory listing is unavailable."));
-            }
-            jdbcTemplate.update(
-                    "UPDATE dealer_inventory SET listing_status = 'OUT_OF_STOCK' WHERE id = ? AND units_available <= 0",
-                    request.getInventoryId()
-            );
+        if (!stockDecrementedViaRest) {
+            // RestTemplate bean is absent (should not happen in production)
+            return ResponseEntity.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("error", "Inventory service is currently unavailable. Please retry your purchase."));
         }
 
         // 3. Server-side price calculation: Ground truth calculation ignoring client finalPriceShown
@@ -256,7 +261,7 @@ public class TransactionController {
                 }
             } else if (jdbcTemplate != null) {
                 try {
-                    jdbcTemplate.update("UPDATE dealer_inventory SET units_available = units_available + 1 WHERE id = ?", request.getInventoryId());
+                    jdbcTemplate.update("UPDATE dealer_inventory SET units_available = units_available + 1, listing_status = CASE WHEN listing_status = 'OUT_OF_STOCK' THEN 'ACTIVE' ELSE listing_status END WHERE id = ?", request.getInventoryId());
                 } catch (Exception ignored) {
                 }
             }
@@ -590,8 +595,7 @@ public class TransactionController {
             }
             if (!stockRestored && jdbcTemplate != null) {
                 try {
-                    jdbcTemplate.update("UPDATE dealer_inventory SET units_available = units_available + 1 WHERE id = ?", enquiry.getInventoryId());
-                    jdbcTemplate.update("UPDATE dealer_inventory SET listing_status = 'AVAILABLE' WHERE id = ? AND units_available > 0", enquiry.getInventoryId());
+                    jdbcTemplate.update("UPDATE dealer_inventory SET units_available = units_available + 1, listing_status = CASE WHEN listing_status = 'OUT_OF_STOCK' THEN 'ACTIVE' ELSE listing_status END WHERE id = ?", enquiry.getInventoryId());
                     stockRestored = true;
                 } catch (Exception ex) {
                     log.error("Failed to restore inventory stock via JDBC", ex);

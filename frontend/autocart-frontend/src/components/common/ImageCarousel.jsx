@@ -1,8 +1,24 @@
 import React, { useState } from "react";
 import { FaChevronLeft, FaChevronRight } from "react-icons/fa";
 
-function ImageCarousel({ images = [], altText = "Car Image", height = "320px", className = "" }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+function ImageCarousel({
+  images = [],
+  altText = "Car Image",
+  height = "320px",
+  className = "",
+  selectedIndex,
+  onIndexChange,
+}) {
+  const [internalIndex, setInternalIndex] = useState(0);
+  const currentIndex =
+    typeof selectedIndex === "number" && selectedIndex >= 0 ? selectedIndex : internalIndex;
+
+  const updateIndex = (newIdx) => {
+    setInternalIndex(newIdx);
+    if (typeof onIndexChange === "function") {
+      onIndexChange(newIdx);
+    }
+  };
 
   // Normalize images input
   const normalizedImages = (images && images.length > 0)
@@ -19,12 +35,14 @@ function ImageCarousel({ images = [], altText = "Car Image", height = "320px", c
 
   const handlePrev = (e) => {
     e.stopPropagation();
-    setCurrentIndex((prev) => (prev === 0 ? normalizedImages.length - 1 : prev - 1));
+    const nextIdx = currentIndex === 0 ? normalizedImages.length - 1 : currentIndex - 1;
+    updateIndex(nextIdx);
   };
 
   const handleNext = (e) => {
     e.stopPropagation();
-    setCurrentIndex((prev) => (prev === normalizedImages.length - 1 ? 0 : prev + 1));
+    const nextIdx = currentIndex === normalizedImages.length - 1 ? 0 : currentIndex + 1;
+    updateIndex(nextIdx);
   };
 
   if (normalizedImages.length === 0) {
@@ -131,7 +149,7 @@ function ImageCarousel({ images = [], altText = "Car Image", height = "320px", c
               }}
               onClick={(e) => {
                 e.stopPropagation();
-                setCurrentIndex(idx);
+                updateIndex(idx);
               }}
               title={`Go to slide ${idx + 1}`}
             ></button>

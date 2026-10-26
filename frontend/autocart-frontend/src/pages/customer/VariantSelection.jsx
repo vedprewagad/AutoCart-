@@ -25,6 +25,7 @@ function VariantSelection() {
   const [colours, setColours] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedColour, setSelectedColour] = useState(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -85,6 +86,7 @@ function VariantSelection() {
       setVariantDetails(details);
       setImages(imgData || []);
       setColours(colourData || []);
+      setSelectedImageIndex(0);
 
       if (imgData && imgData.length > 0) {
         const exterior = imgData.find((img) => img.imageType === "EXTERIOR");
@@ -131,7 +133,7 @@ function VariantSelection() {
     if (!price) return "Contact Showroom";
     const num = Number(price);
     if (num >= 100000) {
-      return `₹ ${(num / 100000).toFixed(2)} Lakh*`;
+      return `₹ ${(num / 100000).toFixed(2)} Lakh`;
     }
     return `₹ ${num.toLocaleString("en-IN")}`;
   };
@@ -212,18 +214,20 @@ function VariantSelection() {
               images={carouselImages}
               altText={modelTitle}
               height="320px"
+              selectedIndex={selectedImageIndex}
+              onIndexChange={setSelectedImageIndex}
             />
 
             {/* INTERACTIVE THUMBNAIL ROW (WHEN MULTIPLE IMAGES EXIST) */}
             {images.length > 1 && (
               <div className="d-flex gap-2 justify-content-center overflow-auto py-2 mt-2">
-                {images.map((img) => (
+                {images.map((img, idx) => (
                   <img
-                    key={img.id}
+                    key={img.id || idx}
                     src={getImageUrl(img.imageUrl)}
                     alt={img.colourName || "Car thumbnail"}
                     className={`rounded border shadow-xs ${
-                      selectedImage?.id === img.id ? "border-primary border-3" : "opacity-75"
+                      selectedImageIndex === idx ? "border-primary border-3" : "opacity-75"
                     }`}
                     style={{
                       width: "60px",
@@ -232,7 +236,10 @@ function VariantSelection() {
                       cursor: "pointer",
                       transition: "0.2s",
                     }}
-                    onClick={() => setSelectedImage(img)}
+                    onClick={() => {
+                      setSelectedImageIndex(idx);
+                      setSelectedImage(img);
+                    }}
                     onError={(e) => {
                       e.target.onerror = null;
                       e.target.src = defaultPlaceholder;
@@ -254,36 +261,6 @@ function VariantSelection() {
                 🎨 {variants.length} Trim Variant{variants.length > 1 ? "s" : ""}
               </span>
             </div>
-
-            {/* COLOUR PALETTE PICKER */}
-            {(colours.length > 0 || images.some((img) => img.imageType === "COLOUR")) && (
-              <div className="mt-3 pt-3 border-top text-start">
-                <small className="fw-bold text-secondary text-uppercase d-block mb-2">
-                  Available Colours
-                </small>
-                <div className="d-flex flex-wrap gap-2">
-                  {images
-                    .filter((img) => img.imageType === "COLOUR")
-                    .map((img) => (
-                      <button
-                        key={img.id}
-                        type="button"
-                        className={`btn btn-sm ${
-                          selectedColour?.id === img.id
-                            ? "btn-dark fw-bold shadow-sm"
-                            : "btn-outline-secondary"
-                        }`}
-                        onClick={() => {
-                          setSelectedColour(img);
-                          setSelectedImage(img);
-                        }}
-                      >
-                        🎨 {img.colourName || "Colour"}
-                      </button>
-                    ))}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* RIGHT: DETAILS, PRICING, EMI & ACTION BUTTONS */}
@@ -307,7 +284,6 @@ function VariantSelection() {
 
             <div className="d-flex align-items-baseline gap-2 mb-1">
               <span className="display-6 fw-bold text-dark">{formatLakh(activePrice)}</span>
-              <span className="text-muted small">*Ex-Showroom Price</span>
             </div>
 
             <p className="text-muted small mb-4">
@@ -321,16 +297,6 @@ function VariantSelection() {
                 onClick={() => setSelectedVariantForDealers(activeVariant)}
               >
                 View Dealer Offers
-              </button>
-
-              <button
-                className="btn btn-outline-primary btn-lg px-4 fw-bold shadow-sm"
-                onClick={() => {
-                  setTestDriveDealerId(null);
-                  setSelectedVariantForTestDrive(activeVariant);
-                }}
-              >
-                🚗 Book Test Drive
               </button>
             </div>
           </div>
@@ -587,16 +553,15 @@ function VariantSelection() {
           <table className="table align-middle">
             <thead className="table-light">
               <tr>
-                <th style={{ width: "35%" }}>Variant Trim</th>
-                <th style={{ width: "20%" }}>Ex-Showroom Price</th>
-                <th style={{ width: "25%" }}>Dealer Offers</th>
-                <th style={{ width: "20%" }} className="text-end">Test Drive</th>
+                <th style={{ width: "45%" }}>Variant Trim</th>
+                <th style={{ width: "25%" }}>Price</th>
+                <th style={{ width: "30%" }} className="text-end">Dealer Offers</th>
               </tr>
             </thead>
             <tbody>
               {filteredVariants.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="text-center py-4 text-muted">
+                  <td colSpan="3" className="text-center py-4 text-muted">
                     No variants match the selected filters.
                   </td>
                 </tr>
@@ -631,7 +596,7 @@ function VariantSelection() {
                         <small className="text-muted">{calculateEmi(v.basePrice)}</small>
                       </td>
 
-                      <td>
+                      <td className="text-end">
                         <button
                           className="btn btn-outline-danger px-3 py-2 fw-bold rounded-3"
                           style={{ borderColor: "#ff5722", color: "#ff5722" }}
@@ -641,19 +606,6 @@ function VariantSelection() {
                           }}
                         >
                           View Dealer Offers
-                        </button>
-                      </td>
-
-                      <td className="text-end">
-                        <button
-                          className="btn btn-outline-primary btn-sm fw-bold px-3 py-2 rounded-3"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setTestDriveDealerId(null);
-                            setSelectedVariantForTestDrive(v);
-                          }}
-                        >
-                          🚗 Test Drive
                         </button>
                       </td>
                     </tr>

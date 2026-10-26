@@ -53,24 +53,41 @@ export const getLiveCatalogModels = async () => {
   }
 };
 
-export const parseNaturalLanguageCarQuery = async (query) => {
+export const parseNaturalLanguageCarQuery = async (query, history = [], lastFilters = null) => {
   if (!query || !query.trim()) return null;
 
   try {
-    const res = await businessApi.post("/ai/search-vehicles", { query });
+    const payload = {
+      query: query.trim(),
+      history: (history || []).slice(-6).map((m) => ({
+        role: m.sender === "user" ? "user" : "assistant",
+        text: (m.text || "").substring(0, 300)
+      })),
+      lastFilters: lastFilters || null
+    };
+
+    const res = await businessApi.post("/ai/search-vehicles", payload);
     if (res && res.data) {
       const data = res.data;
       const filters = data.extractedFilters || {};
       const confidence = data.confidence !== undefined ? data.confidence : 0.8;
-      const explanation = data.explanation || data.message;
+      const explanation = data.reply || data.explanation || data.message;
       const backendVehicles = data.vehicles || [];
+      const intent = data.intent || "UNKNOWN";
+      const quickReplies = data.quickReplies || [];
+      const status = data.status || "SUCCESS";
 
       return await enrichResult(
         {
           ...filters,
+          extractedFilters: filters,
           confidence,
           aiExplanation: explanation,
-          backendVehicles
+          reply: explanation,
+          backendVehicles,
+          intent,
+          quickReplies,
+          status
         },
         query
       );
@@ -81,15 +98,29 @@ export const parseNaturalLanguageCarQuery = async (query) => {
 
   // Client-side Fallback Parser
   const ruleResult = fallbackRuleParser(query);
-  return await enrichResult(ruleResult, query);
+  return await enrichResult({
+    ...ruleResult,
+    extractedFilters: ruleResult,
+    intent: ruleResult.confidence > 0 ? "SEARCH" : "UNKNOWN",
+    reply: ruleResult.confidence > 0 ? "Searching vehicles based on your criteria:" : "I am an AutoCart Car Advisor. How can I help you find a vehicle?",
+    quickReplies: [
+      { label: "🚙 SUVs under 15 Lakh", query: "SUVs under 15 Lakh" },
+      { label: "💰 Cars under 10 Lakh", query: "Cars under 10 Lakh" },
+      { label: "⚡ Electric Cars", query: "Electric cars" }
+    ],
+    status: "SUCCESS"
+  }, query);
 };
 
 const enrichResult = async (result, query) => {
-  const liveModels = await getLiveCatalogModels();
+  const isSearchIntent = result.intent === "SEARCH" || result.intent === "FOLLOW_UP";
+  const hasVehicles = Array.isArray(result.backendVehicles) && result.backendVehicles.length > 0;
   let matchedModel = null;
 
-  // 1. Check backend returned vehicle cards first
-  if (result.backendVehicles && result.backendVehicles.length > 0) {
+  // Show the model spec card only when the intent is SEARCH or FOLLOW_UP
+  // and the response contains at least one real matched vehicle. Never fall back to a default model.
+  if (isSearchIntent && hasVehicles) {
+    const liveModels = await getLiveCatalogModels();
     const firstVehicle = result.backendVehicles[0];
     matchedModel = liveModels.find((m) => m.id === firstVehicle.modelId || m.name.toLowerCase() === firstVehicle.model?.toLowerCase());
     if (!matchedModel && firstVehicle) {
@@ -112,28 +143,14 @@ const enrichResult = async (result, query) => {
     }
   }
 
-  // 2. Otherwise match by filters from live models list
-  if (!matchedModel && liveModels.length > 0) {
-    matchedModel = liveModels.find((m) => {
-      if (result.brand && m.brandName.toLowerCase() !== result.brand.toLowerCase()) return false;
-      if (result.bodyType && m.bodyType.toUpperCase() !== result.bodyType.toUpperCase()) return false;
-      if (result.maxPrice && m.minPrice > result.maxPrice) return false;
-      return true;
-    }) || null;
-  }
-
-  const explanation = result.aiExplanation || generateExplanation(matchedModel, result, query);
+  const finalReply = result.reply || result.aiExplanation || "Here is what I found for you.";
 
   return {
     ...result,
     matchedModel,
-    aiExplanation: explanation
+    reply: finalReply,
+    aiExplanation: finalReply
   };
-};
-
-const generateExplanation = (model, result, query) => {
-  if (!model) return "Here are the matching vehicle results for your request.";
-  return `Based on your request "${query}", the **${model.brandName} ${model.name}** is an ideal match!`;
 };
 
 const fallbackRuleParser = (query) => {

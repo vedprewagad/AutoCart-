@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getEmiProducts, getCardOffers, createPurchaseEnquiry } from "../../services/transactionService";
 import { getVariantColours } from "../../services/catalogService";
@@ -9,7 +9,7 @@ function PaymentPage() {
   const navigate = useNavigate();
   const user = useSelector((state) => state.auth.user);
 
-  const { variant, inventory, price, dealerName } = location.state || {};
+  const { variant, inventory, price } = location.state || {};
 
   const [emiProducts, setEmiProducts] = useState([]);
   const [cardOffers, setCardOffers] = useState([]);
@@ -23,29 +23,6 @@ function PaymentPage() {
   const [createdEnquiry, setCreatedEnquiry] = useState(null);
   const [financingError, setFinancingError] = useState(null);
   const [financingLoading, setFinancingLoading] = useState(false);
-
-  useEffect(() => {
-    if (!variant && !price) {
-      navigate("/dashboard", {
-        replace: true,
-        state: { message: "Please select a vehicle before proceeding to checkout." },
-      });
-      return;
-    }
-    loadFinancingData();
-    if (variant?.id) {
-      getVariantColours(variant.id)
-        .then((cList) => {
-          setColours(cList || []);
-          if (cList && cList.length > 0) {
-            setSelectedColour(cList[0].colourName);
-          } else {
-            setSelectedColour("Standard Factory Colour");
-          }
-        })
-        .catch((err) => console.error(err));
-    }
-  }, [variant, price, navigate]);
 
   const loadFinancingData = async () => {
     setFinancingLoading(true);
@@ -65,16 +42,50 @@ function PaymentPage() {
     }
   };
 
-  const basePrice = Number(variant?.basePrice || price || 0);
+  useEffect(() => {
+    if (!variant && price == null) {
+      navigate("/dashboard", {
+        replace: true,
+        state: { message: "Please select a vehicle before proceeding to checkout." },
+      });
+      return;
+    }
+    Promise.resolve().then(() => {
+      loadFinancingData();
+    });
+    if (variant?.id) {
+      getVariantColours(variant.id)
+        .then((cList) => {
+          setColours(cList || []);
+          if (cList && cList.length > 0) {
+            setSelectedColour(cList[0].colourName);
+          } else {
+            setSelectedColour("Standard Factory Colour");
+          }
+        })
+        .catch((err) => console.error(err));
+    }
+  }, [variant, price, navigate]);
+
+  const basePrice = price != null
+    ? Number(price)
+    : inventory?.listedPrice != null
+      ? Math.max(0, Number(inventory.listedPrice) - Number(inventory.discountAmount || 0))
+      : 0;
+
   const selectedEmi = emiProducts.find((p) => p.id === Number(selectedEmiId));
   const selectedCard = cardOffers.find((c) => c.id === Number(selectedCardId));
 
-  let cardDiscount = 0;
-  if (selectedCard) {
-    const calculated = (basePrice * selectedCard.discountPercent) / 100;
-    cardDiscount = Math.min(calculated, Number(selectedCard.maxDiscountCap || 25000));
-  }
+  const calculateCardDiscount = (offer, priceVal) => {
+    if (!offer || offer.discountPercent == null) return 0;
+    const minTxn = Number(offer.minTransaction != null ? offer.minTransaction : 0);
+    if (priceVal < minTxn) return 0;
+    const rawDiscount = (priceVal * Number(offer.discountPercent)) / 100;
+    const cap = Number(offer.maxDiscountCap != null ? offer.maxDiscountCap : 25000);
+    return Math.min(rawDiscount, cap);
+  };
 
+  const cardDiscount = calculateCardDiscount(selectedCard, basePrice);
   const finalNetPrice = Math.max(0, basePrice - cardDiscount);
 
   const calculateMonthlyEmi = (principal, rate, months) => {
@@ -129,7 +140,7 @@ function PaymentPage() {
     }
   };
 
-  if (!variant && !price) {
+  if (!variant && price == null) {
     return (
       <div className="container py-5 text-center">
         <div className="alert alert-warning">
@@ -368,7 +379,7 @@ function PaymentPage() {
 
               {cardOffers.map((card) => {
                 const isSelected = selectedCardId === card.id;
-                const calcDisc = Math.min((basePrice * card.discountPercent) / 100, Number(card.maxDiscountCap || 25000));
+                const calcDisc = calculateCardDiscount(card, basePrice);
                 return (
                   <div
                     key={card.id}

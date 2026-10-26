@@ -137,7 +137,7 @@ public class RatingController {
             boolean updatedViaRest = false;
             if (restTemplate != null) {
                 try {
-                    restTemplate.put("http://AUTH-SERVICE/api/internal/dealers/" + request.getDealerId() + "/rating?rating=" + roundedAvg, null);
+                    restTemplate.put("http://AUTH-SERVICE/api/internal/dealers/" + request.getDealerId() + "/rating", java.util.Map.of("rating", roundedAvg));
                     updatedViaRest = true;
                 } catch (Exception ignored) {
                 }

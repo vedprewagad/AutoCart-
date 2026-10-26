@@ -59,14 +59,34 @@ function DealerDashboard() {
     if (!user?.dealerId) return;
     try {
       const activeDealerId = user.dealerId;
-      const [invData, tdData, enqData] = await Promise.all([
+      const results = await Promise.allSettled([
         getDealerInventory(activeDealerId),
         getDealerTestDrives(activeDealerId),
         getDealerEnquiries(activeDealerId),
       ]);
-      setInventoryList(invData || []);
-      setTestDrives(tdData || []);
-      setEnquiries(enqData || []);
+      const [invResult, tdResult, enqResult] = results;
+
+      if (invResult.status === 'fulfilled') {
+        setInventoryList(invResult.value || []);
+      } else {
+        console.error("Error loading dealer inventory:", invResult.reason);
+      }
+
+      if (tdResult.status === 'fulfilled') {
+        setTestDrives(tdResult.value || []);
+      } else {
+        console.error("Error loading dealer test drives:", tdResult.reason);
+      }
+
+      if (enqResult.status === 'fulfilled') {
+        setEnquiries(enqResult.value || []);
+      } else {
+        console.error("Error loading dealer enquiries:", enqResult.reason);
+      }
+
+      if (invResult.status === 'rejected' || tdResult.status === 'rejected' || enqResult.status === 'rejected') {
+        setMessage("⚠️ Some dealer dashboard data could not be loaded. Please ensure all backend services are reachable.");
+      }
     } catch (err) {
       console.error("Error loading dealer data:", err);
       setMessage("⚠️ Failed to load dealer inventory and bookings. Please ensure backend services are reachable and click Refresh.");
@@ -85,7 +105,7 @@ function DealerDashboard() {
       loadDealerData();
     } catch (err) {
       console.error(err);
-      alert("Failed to update test drive status.");
+      alert(err.response?.data?.error || err.response?.data?.message || err.message || "Failed to update test drive status.");
     }
   };
 
@@ -96,7 +116,7 @@ function DealerDashboard() {
       loadDealerData();
     } catch (err) {
       console.error(err);
-      alert("Failed to update enquiry status.");
+      alert(err.response?.data?.error || err.response?.data?.message || err.message || "Failed to update enquiry status.");
     }
   };
 
@@ -488,24 +508,41 @@ function DealerDashboard() {
                         </span>
                       </td>
                       <td className="text-end">
-                        <button
-                          className="btn btn-sm btn-outline-success me-1 fw-semibold"
-                          onClick={() => handleUpdateTestDriveStatus(td.id, "CONFIRMED")}
-                        >
-                          ✓ Approve / Confirm
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-primary me-1 fw-semibold"
-                          onClick={() => handleUpdateTestDriveStatus(td.id, "COMPLETED")}
-                        >
-                          ✓ Complete
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-danger fw-semibold"
-                          onClick={() => handleUpdateTestDriveStatus(td.id, "CANCELLED")}
-                        >
-                          ✕ Cancel / Reject
-                        </button>
+                        {td.status === "PENDING" && (
+                          <>
+                            <button
+                              className="btn btn-sm btn-outline-success me-1 fw-semibold"
+                              onClick={() => handleUpdateTestDriveStatus(td.id, "CONFIRMED")}
+                            >
+                              ✓ Approve / Confirm
+                            </button>
+                            <button
+                              className="btn btn-sm btn-outline-danger fw-semibold"
+                              onClick={() => handleUpdateTestDriveStatus(td.id, "CANCELLED")}
+                            >
+                              ✕ Cancel / Reject
+                            </button>
+                          </>
+                        )}
+                        {td.status === "CONFIRMED" && (
+                          <>
+                            <button
+                              className="btn btn-sm btn-outline-primary me-1 fw-semibold"
+                              onClick={() => handleUpdateTestDriveStatus(td.id, "COMPLETED")}
+                            >
+                              ✓ Complete
+                            </button>
+                            <button
+                              className="btn btn-sm btn-outline-danger fw-semibold"
+                              onClick={() => handleUpdateTestDriveStatus(td.id, "CANCELLED")}
+                            >
+                              ✕ Cancel / Reject
+                            </button>
+                          </>
+                        )}
+                        {(td.status === "COMPLETED" || td.status === "CANCELLED" || td.status === "REJECTED") && (
+                          <span className="text-muted small fst-italic">No further actions</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -564,24 +601,41 @@ function DealerDashboard() {
                         </span>
                       </td>
                       <td className="text-end">
-                        <button
-                          className="btn btn-sm btn-outline-success me-1 fw-semibold"
-                          onClick={() => handleUpdateEnquiryStatus(enq.id, "PROCESSED")}
-                        >
-                          ✓ Process
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-primary me-1 fw-semibold"
-                          onClick={() => handleUpdateEnquiryStatus(enq.id, "COMPLETED")}
-                        >
-                          ✓ Complete
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-danger fw-semibold"
-                          onClick={() => handleUpdateEnquiryStatus(enq.id, "REJECTED")}
-                        >
-                          ✕ Reject
-                        </button>
+                        {enq.status === "PENDING" && (
+                          <>
+                            <button
+                              className="btn btn-sm btn-outline-success me-1 fw-semibold"
+                              onClick={() => handleUpdateEnquiryStatus(enq.id, "PROCESSED")}
+                            >
+                              ✓ Process
+                            </button>
+                            <button
+                              className="btn btn-sm btn-outline-danger fw-semibold"
+                              onClick={() => handleUpdateEnquiryStatus(enq.id, "REJECTED")}
+                            >
+                              ✕ Reject
+                            </button>
+                          </>
+                        )}
+                        {enq.status === "PROCESSED" && (
+                          <>
+                            <button
+                              className="btn btn-sm btn-outline-primary me-1 fw-semibold"
+                              onClick={() => handleUpdateEnquiryStatus(enq.id, "COMPLETED")}
+                            >
+                              ✓ Complete
+                            </button>
+                            <button
+                              className="btn btn-sm btn-outline-danger fw-semibold"
+                              onClick={() => handleUpdateEnquiryStatus(enq.id, "REJECTED")}
+                            >
+                              ✕ Reject
+                            </button>
+                          </>
+                        )}
+                        {(enq.status === "COMPLETED" || enq.status === "CANCELLED" || enq.status === "REJECTED") && (
+                          <span className="text-muted small fst-italic">No further actions</span>
+                        )}
                       </td>
                     </tr>
                   ))}

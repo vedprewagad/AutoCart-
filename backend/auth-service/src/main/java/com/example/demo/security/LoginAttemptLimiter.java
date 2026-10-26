@@ -91,6 +91,38 @@ public class LoginAttemptLimiter {
         incrementKey(ipKey, now);
     }
 
+    public boolean isPasswordResetBlocked(HttpServletRequest request, String email) {
+        String ip = extractClientIp(request);
+        return isPasswordResetBlocked(ip, email);
+    }
+
+    public boolean isPasswordResetBlocked(String ip, String email) {
+        long now = System.currentTimeMillis();
+        cleanUp(now);
+
+        String pairKey = "reset:" + buildKey(ip, email);
+        if (isKeyBlocked(pairKey, now)) {
+            return true;
+        }
+
+        String ipKey = "reset:ip:" + normalizeIp(ip);
+        return isKeyBlocked(ipKey, now);
+    }
+
+    public void recordPasswordResetAttempt(HttpServletRequest request, String email) {
+        String ip = extractClientIp(request);
+        recordPasswordResetAttempt(ip, email);
+    }
+
+    public void recordPasswordResetAttempt(String ip, String email) {
+        long now = System.currentTimeMillis();
+        String pairKey = "reset:" + buildKey(ip, email);
+        incrementKey(pairKey, now);
+
+        String ipKey = "reset:ip:" + normalizeIp(ip);
+        incrementKey(ipKey, now);
+    }
+
     public void reset(HttpServletRequest request, String email) {
         String ip = extractClientIp(request);
         reset(ip, email);

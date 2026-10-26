@@ -73,11 +73,17 @@ public class DealerInventoryController {
                     .body(Map.of("error", "Forbidden: Cannot create inventory listings for another showroom."));
         }
 
-        if (request.getListedPrice() != null && request.getListedPrice().compareTo(BigDecimal.ZERO) <= 0) {
+        if (request.getVariantId() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Variant ID is required."));
+        }
+        if (request.getListedPrice() == null || request.getListedPrice().compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest().body(Map.of("error", "Listed price must be greater than zero."));
         }
         if (request.getDiscountAmount() != null && request.getDiscountAmount().compareTo(BigDecimal.ZERO) < 0) {
             return ResponseEntity.badRequest().body(Map.of("error", "Discount amount cannot be negative."));
+        }
+        if (request.getDiscountAmount() != null && request.getDiscountAmount().compareTo(request.getListedPrice()) > 0) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Discount amount cannot exceed listed price."));
         }
         if (request.getUnitsAvailable() != null && request.getUnitsAvailable() <= 0) {
             return ResponseEntity.badRequest().body(Map.of("error", "Units available must be greater than zero."));
@@ -86,8 +92,10 @@ public class DealerInventoryController {
             return ResponseEntity.badRequest().body(Map.of("error", "Delivery days must be greater than zero."));
         }
 
-        CarVariant variant = variantRepository.findById(request.getVariantId())
-                .orElseThrow(() -> new ResourceNotFoundException("Variant not found: " + request.getVariantId()));
+        CarVariant variant = variantRepository.findById(request.getVariantId()).orElse(null);
+        if (variant == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Variant not found: " + request.getVariantId()));
+        }
 
         DealerInventory inventory = new DealerInventory();
         inventory.setDealerId(authDealerId);
@@ -151,7 +159,28 @@ public class DealerInventoryController {
             String contactPhone = null;
             Double rating = null;
 
-            if (jdbcTemplate != null && inv.getDealerId() != null) {
+            if (restTemplate != null && inv.getDealerId() != null) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> row = restTemplate.getForObject(
+                            "http://AUTH-SERVICE/api/internal/dealers/" + inv.getDealerId(),
+                            Map.class
+                    );
+                    if (row != null) {
+                        showroomName = (String) row.get("showroomName");
+                        if (showroomName == null) showroomName = (String) row.get("showroom_name");
+                        city = (String) row.get("city");
+                        state = (String) row.get("state");
+                        contactPhone = (String) row.get("contactPhone");
+                        if (contactPhone == null) contactPhone = (String) row.get("contact_phone");
+                        if (row.get("rating") != null) {
+                            rating = ((Number) row.get("rating")).doubleValue();
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (showroomName == null && jdbcTemplate != null && inv.getDealerId() != null) {
                 try {
                     Map<String, Object> row = jdbcTemplate.queryForMap(
                             "SELECT showroom_name, city, state, contact_phone, rating FROM dealers WHERE id = ?",
@@ -195,21 +224,39 @@ public class DealerInventoryController {
     @GetMapping("/admin/inventory/pending")
     public ResponseEntity<List<DealerInventory>> getPendingInventoryListings() {
         List<DealerInventory> list = inventoryRepository.findByApprovalStatus("PENDING");
-        if (jdbcTemplate != null) {
-            for (DealerInventory inv : list) {
-                if (inv.getDealerId() != null) {
+        for (DealerInventory inv : list) {
+            if (inv.getDealerId() != null) {
+                String sName = null;
+                String phone = null;
+                if (restTemplate != null) {
+                    try {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> row = restTemplate.getForObject(
+                                "http://AUTH-SERVICE/api/internal/dealers/" + inv.getDealerId(),
+                                Map.class
+                        );
+                        if (row != null) {
+                            sName = (String) row.get("showroomName");
+                            if (sName == null) sName = (String) row.get("showroom_name");
+                            phone = (String) row.get("contactPhone");
+                            if (phone == null) phone = (String) row.get("contact_phone");
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+                if (sName == null && jdbcTemplate != null) {
                     try {
                         Map<String, Object> row = jdbcTemplate.queryForMap(
                                 "SELECT showroom_name, contact_phone FROM dealers WHERE id = ?",
                                 inv.getDealerId()
                         );
-                        String sName = (String) row.get("showroom_name");
-                        String phone = (String) row.get("contact_phone");
-                        inv.setShowroomName(sName);
-                        inv.setContactPhone(phone);
+                        sName = (String) row.get("showroom_name");
+                        phone = (String) row.get("contact_phone");
                     } catch (Exception ignored) {
                     }
                 }
+                inv.setShowroomName(sName);
+                inv.setContactPhone(phone);
             }
         }
         return ResponseEntity.ok(list);

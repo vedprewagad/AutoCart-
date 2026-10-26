@@ -10,10 +10,10 @@ public interface DealerInventoryRepository extends JpaRepository<DealerInventory
     List<DealerInventory> findByApprovalStatus(String approvalStatus);
 
     @org.springframework.data.jpa.repository.Modifying
-    @org.springframework.data.jpa.repository.Query("UPDATE DealerInventory di SET di.unitsAvailable = di.unitsAvailable - 1 WHERE di.id = :id AND di.unitsAvailable > 0")
+    @org.springframework.data.jpa.repository.Query("UPDATE DealerInventory di SET di.listingStatus = CASE WHEN di.unitsAvailable - 1 = 0 THEN 'OUT_OF_STOCK' ELSE di.listingStatus END, di.unitsAvailable = di.unitsAvailable - 1 WHERE di.id = :id AND di.unitsAvailable > 0")
     int decrementUnitsAvailable(@org.springframework.data.repository.query.Param("id") Long id);
 
     @org.springframework.data.jpa.repository.Modifying
-    @org.springframework.data.jpa.repository.Query("UPDATE DealerInventory di SET di.unitsAvailable = di.unitsAvailable + 1 WHERE di.id = :id")
+    @org.springframework.data.jpa.repository.Query("UPDATE DealerInventory di SET di.unitsAvailable = di.unitsAvailable + 1, di.listingStatus = CASE WHEN di.listingStatus = 'OUT_OF_STOCK' THEN 'ACTIVE' ELSE di.listingStatus END WHERE di.id = :id")
     int incrementUnitsAvailable(@org.springframework.data.repository.query.Param("id") Long id);
 }

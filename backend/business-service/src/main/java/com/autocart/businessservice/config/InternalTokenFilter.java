@@ -1,6 +1,8 @@
 package com.autocart.businessservice.config;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
@@ -32,7 +34,9 @@ public class InternalTokenFilter extends OncePerRequestFilter {
             }
 
             String providedToken = request.getHeader("X-Internal-Token");
-            if (providedToken == null || !providedToken.equals(configuredInternalKey)) {
+            if (providedToken == null || !MessageDigest.isEqual(
+                    providedToken.getBytes(StandardCharsets.UTF_8),
+                    configuredInternalKey.getBytes(StandardCharsets.UTF_8))) {
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                 response.setContentType("application/json");
                 response.getWriter().write("{\"error\":\"Forbidden: Invalid or missing X-Internal-Token header.\"}");

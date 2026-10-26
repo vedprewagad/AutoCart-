@@ -74,14 +74,15 @@ function AdminDashboard() {
   const [newVariantCc, setNewVariantCc] = useState("1197");
 
   const [statusMessage, setStatusMessage] = useState("");
+  const [serviceWarnings, setServiceWarnings] = useState([]);
 
   useEffect(() => {
     loadAdminData();
   }, []);
 
   const loadAdminData = async () => {
-    try {
-      const [dealers, inventory, brandList, bankList, emiList, offerList] = await Promise.all([
+    const [dealersResult, inventoryResult, brandsResult, banksResult, emiResult, offersResult] =
+      await Promise.allSettled([
         getPendingDealers(),
         getPendingInventory(),
         getBrands(),
@@ -89,15 +90,47 @@ function AdminDashboard() {
         getEmiProducts(),
         getCardOffers(),
       ]);
-      setPendingDealers(dealers || []);
-      setPendingInventory(inventory || []);
-      setBrands(brandList || []);
-      setBanks(bankList || []);
-      setEmiProducts(emiList || []);
-      setCardOffers(offerList || []);
-    } catch (err) {
-      console.error("Error loading admin data:", err);
+
+    const warnings = [];
+
+    if (dealersResult.status === "fulfilled") {
+      setPendingDealers(dealersResult.value || []);
+    } else {
+      console.error("Error loading pending dealers:", dealersResult.reason);
+      warnings.push("Dealer approvals");
     }
+    if (inventoryResult.status === "fulfilled") {
+      setPendingInventory(inventoryResult.value || []);
+    } else {
+      console.error("Error loading pending inventory:", inventoryResult.reason);
+      warnings.push("Inventory approvals");
+    }
+    if (brandsResult.status === "fulfilled") {
+      setBrands(brandsResult.value || []);
+    } else {
+      console.error("Error loading brands:", brandsResult.reason);
+      warnings.push("Catalogue brands");
+    }
+    if (banksResult.status === "fulfilled") {
+      setBanks(banksResult.value || []);
+    } else {
+      console.error("Error loading banks:", banksResult.reason);
+      warnings.push("Finance – bank partners");
+    }
+    if (emiResult.status === "fulfilled") {
+      setEmiProducts(emiResult.value || []);
+    } else {
+      console.error("Error loading EMI products:", emiResult.reason);
+      warnings.push("Finance – EMI products");
+    }
+    if (offersResult.status === "fulfilled") {
+      setCardOffers(offersResult.value || []);
+    } else {
+      console.error("Error loading card offers:", offersResult.reason);
+      warnings.push("Finance – card offers");
+    }
+
+    setServiceWarnings(warnings);
   };
 
   const handleAddBank = async (e) => {
@@ -423,6 +456,13 @@ function AdminDashboard() {
       </div>
 
       {statusMessage && <div className="alert alert-success py-3 mb-4 rounded-3 fw-semibold">{statusMessage}</div>}
+
+      {serviceWarnings.length > 0 && (
+        <div className="alert alert-warning py-3 mb-4 rounded-3">
+          <strong>⚠️ Some data could not be loaded:</strong> {serviceWarnings.join(", ")}.
+          One or more backend services may be temporarily unavailable. Displayed counts may be incomplete.
+        </div>
+      )}
 
       {/* METRICS CARDS */}
       <div className="row g-3 mb-4">

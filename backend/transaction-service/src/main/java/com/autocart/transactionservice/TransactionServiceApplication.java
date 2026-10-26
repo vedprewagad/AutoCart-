@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 @SpringBootApplication
@@ -20,7 +21,10 @@ public class TransactionServiceApplication {
     @Bean
     @LoadBalanced
     public RestTemplate restTemplate() {
-        RestTemplate restTemplate = new RestTemplate();
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(3_000); // 3 s
+        factory.setReadTimeout(5_000);    // 5 s
+        RestTemplate restTemplate = new RestTemplate(factory);
         restTemplate.getInterceptors().add((request, body, execution) -> {
             if (internalApiKey != null && !internalApiKey.isBlank()) {
                 request.getHeaders().add("X-Internal-Token", internalApiKey);

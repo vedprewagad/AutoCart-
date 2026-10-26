@@ -50,6 +50,8 @@ public class InternalAuthController {
         Map<String, Object> map = new HashMap<>();
         map.put("dealerId", dealer.getId());
         map.put("showroomName", dealer.getShowroomName() != null ? dealer.getShowroomName() : "");
+        map.put("city", dealer.getCity() != null ? dealer.getCity() : "");
+        map.put("state", dealer.getState() != null ? dealer.getState() : "");
         map.put("contactPhone", dealer.getContactPhone() != null ? dealer.getContactPhone() : "");
         map.put("rating", dealer.getRating() != null ? dealer.getRating() : 0.0);
         return ResponseEntity.ok(map);
@@ -59,12 +61,14 @@ public class InternalAuthController {
     @Transactional(readOnly = true)
     public ResponseEntity<Map<String, Object>> getDealerByUserId(@PathVariable Long userId) {
         Dealer dealer = dealerRepository.findByUserId(userId).orElse(null);
-        if (dealer == null) {
+        if (dealer == null || (dealer.getStatus() != null && dealer.getStatus() != com.example.demo.entity.DealerStatus.APPROVED)) {
             return ResponseEntity.notFound().build();
         }
         Map<String, Object> map = new HashMap<>();
         map.put("dealerId", dealer.getId());
         map.put("showroomName", dealer.getShowroomName() != null ? dealer.getShowroomName() : "");
+        map.put("city", dealer.getCity() != null ? dealer.getCity() : "");
+        map.put("state", dealer.getState() != null ? dealer.getState() : "");
         map.put("contactPhone", dealer.getContactPhone() != null ? dealer.getContactPhone() : "");
         map.put("rating", dealer.getRating() != null ? dealer.getRating() : 0.0);
         return ResponseEntity.ok(map);

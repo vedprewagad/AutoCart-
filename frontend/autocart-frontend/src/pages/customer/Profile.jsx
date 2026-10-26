@@ -10,6 +10,14 @@ function Profile() {
     mobile: "",
     city: "",
     state: "",
+    role: "",
+    showroomName: "",
+    address: "",
+    pinCode: "",
+    contactPhone: "",
+    workingHours: "",
+    gstNumber: "",
+    licenseNumber: "",
   });
 
   const [loading, setLoading] = useState(true);
@@ -23,12 +31,20 @@ function Profile() {
       const data = await getCurrentUser();
 
       setFormData({
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        mobile: data.mobile,
-        city: data.city,
-        state: data.state,
+        firstName: data.firstName || "",
+        lastName: data.lastName || "",
+        email: data.email || "",
+        mobile: data.mobile || "",
+        city: data.city || "",
+        state: data.state || "",
+        role: data.role || "",
+        showroomName: data.showroomName || "",
+        address: data.address || "",
+        pinCode: data.pinCode || "",
+        contactPhone: data.contactPhone || "",
+        workingHours: data.workingHours || "",
+        gstNumber: data.gstNumber || "",
+        licenseNumber: data.licenseNumber || "",
       });
     } catch (err) {
       console.error(err);
@@ -58,7 +74,10 @@ function Profile() {
     try {
       const updated = await updateProfile(formData);
 
-      setFormData(updated);
+      setFormData((prev) => ({
+        ...prev,
+        ...updated,
+      }));
 
       setSuccess("Profile updated successfully.");
     } catch (err) {
@@ -172,6 +191,94 @@ function Profile() {
                     onChange={handleChange}
                   />
                 </div>
+
+                {formData.role === "DEALER" && (
+                  <>
+                    <hr className="my-4" />
+                    <h5 className="fw-bold mb-3 text-primary">Dealership Information</h5>
+
+                    <div className="mb-3">
+                      <label className="form-label">Showroom Name</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        name="showroomName"
+                        value={formData.showroomName}
+                        onChange={handleChange}
+                      />
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label">Showroom Address</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        name="address"
+                        value={formData.address}
+                        onChange={handleChange}
+                      />
+                    </div>
+
+                    <div className="row">
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Pincode</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          name="pinCode"
+                          value={formData.pinCode}
+                          onChange={handleChange}
+                        />
+                      </div>
+
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Contact Phone</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          name="contactPhone"
+                          value={formData.contactPhone}
+                          onChange={handleChange}
+                        />
+                      </div>
+
+                      <div className="col-md-4 mb-3">
+                        <label className="form-label">Working Hours</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          name="workingHours"
+                          value={formData.workingHours}
+                          onChange={handleChange}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="row mb-4">
+                      <div className="col-md-6 mb-3">
+                        <label className="form-label">GST Number</label>
+                        <input
+                          type="text"
+                          className="form-control bg-light"
+                          value={formData.gstNumber}
+                          readOnly
+                        />
+                        <small className="text-muted">GST number cannot be changed.</small>
+                      </div>
+
+                      <div className="col-md-6 mb-3">
+                        <label className="form-label">License Number</label>
+                        <input
+                          type="text"
+                          className="form-control bg-light"
+                          value={formData.licenseNumber}
+                          readOnly
+                        />
+                        <small className="text-muted">License number cannot be changed.</small>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div className="text-center">
                   <button type="submit" className="btn btn-primary px-5 py-2">

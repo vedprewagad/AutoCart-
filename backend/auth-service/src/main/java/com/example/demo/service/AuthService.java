@@ -462,25 +462,33 @@ public class AuthService {
 	        Dealer dealer = dealerRepository.findByUser(user)
 	                .orElseThrow(() -> new RuntimeException("Dealer profile not found"));
 
-	        dealer.setShowroomName(request.getShowroomName() != null
-	                ? request.getShowroomName().trim()
-	                : null);
+	        if (request.getShowroomName() != null && !request.getShowroomName().trim().isEmpty()) {
+	            dealer.setShowroomName(request.getShowroomName().trim());
+	        }
 
-	        dealer.setAddress(request.getAddress() != null
-	                ? request.getAddress().trim()
-	                : null);
+	        if (request.getAddress() != null && !request.getAddress().trim().isEmpty()) {
+	            dealer.setAddress(request.getAddress().trim());
+	        }
 
-	        dealer.setPinCode(request.getPinCode() != null
-	                ? request.getPinCode().trim()
-	                : null);
+	        if (request.getCity() != null && !request.getCity().trim().isEmpty()) {
+	            dealer.setCity(request.getCity().trim());
+	        }
 
-	        dealer.setContactPhone(request.getContactPhone() != null
-	                ? request.getContactPhone().trim()
-	                : null);
+	        if (request.getState() != null && !request.getState().trim().isEmpty()) {
+	            dealer.setState(request.getState().trim());
+	        }
 
-	        dealer.setWorkingHours(request.getWorkingHours() != null
-	                ? request.getWorkingHours().trim()
-	                : null);
+	        if (request.getPinCode() != null && !request.getPinCode().trim().isEmpty()) {
+	            dealer.setPinCode(request.getPinCode().trim());
+	        }
+
+	        if (request.getContactPhone() != null && !request.getContactPhone().trim().isEmpty()) {
+	            dealer.setContactPhone(request.getContactPhone().trim());
+	        }
+
+	        if (request.getWorkingHours() != null && !request.getWorkingHours().trim().isEmpty()) {
+	            dealer.setWorkingHours(request.getWorkingHours().trim());
+	        }
 
 	        dealerRepository.save(dealer);
 	    }

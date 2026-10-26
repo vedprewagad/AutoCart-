@@ -54,15 +54,15 @@ public class AuthController {
 	@PostMapping("/forgot-password")
 	public ResponseEntity<String> forgotPassword(@RequestBody java.util.Map<String, String> body, jakarta.servlet.http.HttpServletRequest httpRequest) {
 		String email = body != null ? body.get("email") : null;
-		if (loginAttemptLimiter.isBlocked(httpRequest, email)) {
+		if (loginAttemptLimiter.isPasswordResetBlocked(httpRequest, email)) {
 			throw new com.example.demo.exception.RateLimitExceededException("Too many password reset requests. Please try again after 15 minutes.");
 		}
 		try {
 			String result = authService.forgotPassword(email);
-			loginAttemptLimiter.recordFailure(httpRequest, email);
+			loginAttemptLimiter.recordPasswordResetAttempt(httpRequest, email);
 			return ResponseEntity.ok(result);
 		} catch (Exception e) {
-			loginAttemptLimiter.recordFailure(httpRequest, email);
+			loginAttemptLimiter.recordPasswordResetAttempt(httpRequest, email);
 			throw e;
 		}
 	}

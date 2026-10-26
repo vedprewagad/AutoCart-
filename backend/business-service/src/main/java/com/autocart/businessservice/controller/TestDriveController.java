@@ -54,22 +54,51 @@ public class TestDriveController {
                     .body(Map.of("error", "Unauthorized: Valid authenticated session required to book test drive"));
         }
 
-        CarVariant variant = variantRepository.findById(request.getVariantId())
-                .orElseThrow(() -> new ResourceNotFoundException("Variant not found: " + request.getVariantId()));
+        if (request.getVariantId() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Variant ID is required."));
+        }
+        CarVariant variant = variantRepository.findById(request.getVariantId()).orElse(null);
+        if (variant == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Variant not found: " + request.getVariantId()));
+        }
 
-        if (request.getDealerId() != null && request.getVariantId() != null
-                && request.getPreferredDate() != null && request.getPreferredTime() != null) {
-            boolean conflict = bookingRepository.existsByDealerIdAndVariant_IdAndPreferredDateAndPreferredTimeAndStatusNotIn(
-                    request.getDealerId(),
-                    request.getVariantId(),
-                    request.getPreferredDate(),
-                    request.getPreferredTime(),
-                    List.of("CANCELLED", "REJECTED")
-            );
-            if (conflict) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(Map.of("error", "This time slot is already booked, please choose another"));
+        if (request.getDealerId() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Dealer ID is required."));
+        }
+
+        if (request.getPreferredDate() == null || request.getPreferredDate().isBefore(LocalDate.now())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Preferred date cannot be in the past."));
+        }
+
+        if (request.getPreferredTime() == null || request.getPreferredTime().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Preferred time is required."));
+        }
+
+        if (restTemplate != null) {
+            try {
+                org.springframework.http.ResponseEntity<Map> dResp = restTemplate.getForEntity(
+                        "http://AUTH-SERVICE/api/internal/dealers/" + request.getDealerId(),
+                        Map.class
+                );
+                if (!dResp.getStatusCode().is2xxSuccessful()) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Dealer showroom not found: " + request.getDealerId()));
+                }
+            } catch (org.springframework.web.client.HttpClientErrorException.NotFound ex) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Dealer showroom not found: " + request.getDealerId()));
+            } catch (Exception ignored) {
             }
+        }
+
+        boolean conflict = bookingRepository.existsByDealerIdAndVariant_IdAndPreferredDateAndPreferredTimeAndStatusNotIn(
+                request.getDealerId(),
+                request.getVariantId(),
+                request.getPreferredDate(),
+                request.getPreferredTime(),
+                List.of("CANCELLED", "REJECTED")
+        );
+        if (conflict) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "This time slot is already booked, please choose another"));
         }
 
         TestDriveBooking booking = new TestDriveBooking();
@@ -358,6 +387,19 @@ public class TestDriveController {
     }
 
     private Long resolveDealerId(Long userId) {
+        if (userId != null && restTemplate != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> dMap = restTemplate.getForObject(
+                        "http://AUTH-SERVICE/api/internal/dealers/user/" + userId,
+                        Map.class
+                );
+                if (dMap != null && dMap.get("dealerId") != null) {
+                    return ((Number) dMap.get("dealerId")).longValue();
+                }
+            } catch (Exception ignored) {
+            }
+        }
         if (userId != null && jdbcTemplate != null) {
             try {
                 return jdbcTemplate.queryForObject(
