@@ -50,6 +50,31 @@ public class AdminCatalogController {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    private boolean hasAssociatedTransactions(List<Long> variantIds) {
+        if (variantIds == null || variantIds.isEmpty() || jdbcTemplate == null) {
+            return false;
+        }
+        String inSql = String.join(",", Collections.nCopies(variantIds.size(), "?"));
+
+        try {
+            // 1. Check local dealer inventory
+            Integer invCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM dealer_inventory WHERE variant_id IN (" + inSql + ")",
+                    Integer.class, variantIds.toArray());
+            if (invCount != null && invCount > 0) return true;
+
+            // 2. Check local test drive bookings
+            Integer tdCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM test_drive_bookings WHERE variant_id IN (" + inSql + ")",
+                    Integer.class, variantIds.toArray());
+            if (tdCount != null && tdCount > 0) return true;
+        } catch (Exception ex) {
+            // Ignore and proceed to standard JPA check
+        }
+
+        return false;
+    }
+
     // --- BRANDS ---
     @PostMapping("/brands")
     public ResponseEntity<Brand> createBrand(@Valid @RequestBody Brand brand) {
@@ -63,27 +88,32 @@ public class AdminCatalogController {
             return ResponseEntity.notFound().build();
         }
 
-        try {
-            if (jdbcTemplate != null) {
-                try {
-                    jdbcTemplate.update("DELETE FROM autocart_auth.dealer_brands WHERE brand_id = ?", id);
-                } catch (Exception ignored) {
-                }
-                jdbcTemplate.update("DELETE FROM brands WHERE id = ?", id);
-            } else {
-                List<CarModel> models = modelRepository.findByBrandId(id);
-                for (CarModel m : models) {
-                    variantRepository.deleteByModelId(m.getId());
-                }
-                modelRepository.deleteByBrandId(id);
-                brandRepository.deleteById(id);
+        List<CarModel> models = modelRepository.findByBrandId(id);
+        List<Long> variantIds = new ArrayList<>();
+        for (CarModel m : models) {
+            List<CarVariant> variants = variantRepository.findByModelId(m.getId());
+            for (CarVariant v : variants) {
+                variantIds.add(v.getId());
             }
+        }
+
+        if (hasAssociatedTransactions(variantIds)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "Cannot delete brand: associated dealer inventory, bookings, or purchase enquiries exist."));
+        }
+
+        try {
+            for (CarModel m : models) {
+                variantRepository.deleteByModelId(m.getId());
+            }
+            modelRepository.deleteByBrandId(id);
+            brandRepository.deleteById(id);
             return ResponseEntity.ok(Map.of("message", "Brand deleted successfully"));
         } catch (org.springframework.dao.DataIntegrityViolationException dive) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", "Cannot delete brand: foreign key constraint violation. " + dive.getMessage()));
+                    .body(Map.of("error", "Cannot delete brand: foreign key constraint violation. Associated inventory, bookings or enquiries exist."));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "Error deleting brand: " + e.getMessage()));
         }
     }
@@ -121,19 +151,23 @@ public class AdminCatalogController {
             return ResponseEntity.notFound().build();
         }
 
+        List<CarVariant> variants = variantRepository.findByModelId(id);
+        List<Long> variantIds = variants.stream().map(CarVariant::getId).toList();
+
+        if (hasAssociatedTransactions(variantIds)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "Cannot delete model: associated dealer inventory, bookings, or purchase enquiries exist for its variants."));
+        }
+
         try {
-            if (jdbcTemplate != null) {
-                jdbcTemplate.update("DELETE FROM car_models WHERE id = ?", id);
-            } else {
-                variantRepository.deleteByModelId(id);
-                modelRepository.deleteById(id);
-            }
+            variantRepository.deleteByModelId(id);
+            modelRepository.deleteById(id);
             return ResponseEntity.ok(Map.of("message", "Model deleted successfully"));
         } catch (org.springframework.dao.DataIntegrityViolationException dive) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", "Cannot delete model: foreign key constraint violation. " + dive.getMessage()));
+                    .body(Map.of("error", "Cannot delete model: foreign key constraint violation. Associated inventory or bookings exist."));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "Error deleting model: " + e.getMessage()));
         }
     }
@@ -197,18 +231,19 @@ public class AdminCatalogController {
             return ResponseEntity.notFound().build();
         }
 
+        if (hasAssociatedTransactions(List.of(id))) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "Cannot delete variant: associated dealer inventory, bookings, or purchase enquiries exist."));
+        }
+
         try {
-            if (jdbcTemplate != null) {
-                jdbcTemplate.update("DELETE FROM car_variants WHERE id = ?", id);
-            } else {
-                variantRepository.deleteById(id);
-            }
+            variantRepository.deleteById(id);
             return ResponseEntity.ok(Map.of("message", "Variant deleted successfully"));
         } catch (org.springframework.dao.DataIntegrityViolationException dive) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", "Cannot delete variant: foreign key constraint violation. " + dive.getMessage()));
+                    .body(Map.of("error", "Cannot delete variant: foreign key constraint violation. Associated inventory or bookings exist."));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "Error deleting variant: " + e.getMessage()));
         }
     }
