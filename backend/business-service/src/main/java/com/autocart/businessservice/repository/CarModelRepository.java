@@ -14,8 +14,6 @@ import com.autocart.businessservice.entity.CarModel;
 @Repository
 public interface CarModelRepository extends JpaRepository<CarModel, Long> {
 
-    List<CarModel> findByBrand(Brand brand);
-
     @Query("SELECT DISTINCT m FROM CarModel m LEFT JOIN FETCH m.variants WHERE m.brand = :brand")
     List<CarModel> findByBrandWithVariants(@Param("brand") Brand brand);
 

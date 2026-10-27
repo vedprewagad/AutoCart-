@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class LoginAttemptLimiter {
 
     private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int MAX_IP_FAILED_ATTEMPTS = 30;
     private static final long WINDOW_MS = 15 * 60 * 1000L; // 15 minutes
 
     private static class Attempt {
@@ -32,19 +33,35 @@ public class LoginAttemptLimiter {
 
     private final Map<String, Attempt> attemptsCache = new ConcurrentHashMap<>();
 
+    private boolean isGatewayOrLocalhost(String remoteAddr) {
+        if (remoteAddr == null || remoteAddr.isBlank()) {
+            return false;
+        }
+        String addr = remoteAddr.trim();
+        return addr.equals("127.0.0.1")
+                || addr.equals("::1")
+                || addr.equals("0:0:0:0:0:0:0:1")
+                || addr.equalsIgnoreCase("localhost");
+    }
+
     public String extractClientIp(HttpServletRequest request) {
         if (request == null) {
             return "unknown";
         }
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
-            return xForwardedFor.split(",")[0].trim();
+        String remoteAddr = request.getRemoteAddr() != null ? request.getRemoteAddr().trim() : "unknown";
+
+        // Use X-Forwarded-For only if request remote address is the gateway or localhost
+        if (isGatewayOrLocalhost(remoteAddr)) {
+            String xForwardedFor = request.getHeader("X-Forwarded-For");
+            if (xForwardedFor != null && !xForwardedFor.isBlank()) {
+                return xForwardedFor.split(",")[0].trim();
+            }
+            String realIp = request.getHeader("X-Real-IP");
+            if (realIp != null && !realIp.isBlank()) {
+                return realIp.trim();
+            }
         }
-        String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.trim();
-        }
-        return request.getRemoteAddr() != null ? request.getRemoteAddr() : "unknown";
+        return remoteAddr;
     }
 
     public boolean isBlocked(HttpServletRequest request, String email) {
@@ -57,15 +74,15 @@ public class LoginAttemptLimiter {
         cleanUp(now);
 
         String pairKey = buildKey(ip, email);
-        if (isKeyBlocked(pairKey, now)) {
+        if (isKeyBlocked(pairKey, MAX_FAILED_ATTEMPTS, now)) {
             return true;
         }
 
         String ipKey = "ip:" + normalizeIp(ip);
-        return isKeyBlocked(ipKey, now);
+        return isKeyBlocked(ipKey, MAX_IP_FAILED_ATTEMPTS, now);
     }
 
-    private boolean isKeyBlocked(String key, long now) {
+    private boolean isKeyBlocked(String key, int maxAllowed, long now) {
         Attempt attempt = attemptsCache.get(key);
         if (attempt == null) {
             return false;
@@ -74,7 +91,7 @@ public class LoginAttemptLimiter {
             attemptsCache.remove(key);
             return false;
         }
-        return attempt.getCount() >= MAX_FAILED_ATTEMPTS;
+        return attempt.getCount() >= maxAllowed;
     }
 
     public void recordFailure(HttpServletRequest request, String email) {
@@ -101,12 +118,12 @@ public class LoginAttemptLimiter {
         cleanUp(now);
 
         String pairKey = "reset:" + buildKey(ip, email);
-        if (isKeyBlocked(pairKey, now)) {
+        if (isKeyBlocked(pairKey, MAX_FAILED_ATTEMPTS, now)) {
             return true;
         }
 
         String ipKey = "reset:ip:" + normalizeIp(ip);
-        return isKeyBlocked(ipKey, now);
+        return isKeyBlocked(ipKey, MAX_IP_FAILED_ATTEMPTS, now);
     }
 
     public void recordPasswordResetAttempt(HttpServletRequest request, String email) {

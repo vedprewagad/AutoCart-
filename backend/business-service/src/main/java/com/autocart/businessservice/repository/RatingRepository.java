@@ -16,8 +16,6 @@ public interface RatingRepository extends JpaRepository<Rating, Long> {
 
     List<Rating> findByDealerIdOrderByCreatedAtDesc(Long dealerId);
 
-    List<Rating> findByUserIdOrderByCreatedAtDesc(Long userId);
-
     @Query("SELECT AVG(r.ratingValue) FROM Rating r WHERE r.dealerId = :dealerId")
     Double getAverageRatingForDealer(@Param("dealerId") Long dealerId);
 

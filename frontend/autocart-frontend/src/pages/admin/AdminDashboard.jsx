@@ -394,10 +394,17 @@ function AdminDashboard() {
       try {
         await deleteBrand(brandId);
         setStatusMessage(`Brand "${brandName}" deleted successfully!`);
-        loadAdminData();
+        if (selectedBrandForModel == brandId) {
+          setSelectedBrandForModel("");
+          setModels([]);
+          setSelectedModelForVariant("");
+          setVariants([]);
+        }
+        await loadAdminData();
       } catch (err) {
         console.error(err);
-        alert("Failed to delete brand.");
+        const errorMsg = err.response?.data?.error || err.response?.data?.message || "Failed to delete brand.";
+        alert(errorMsg);
       }
     }
   };
@@ -407,10 +414,19 @@ function AdminDashboard() {
       try {
         await deleteModel(modelId);
         setStatusMessage(`Model "${modelName}" deleted successfully!`);
-        loadAdminData();
+        if (selectedModelForVariant == modelId) {
+          setSelectedModelForVariant("");
+          setVariants([]);
+        }
+        if (selectedBrandForModel) {
+          const mList = await getModelsByBrand(selectedBrandForModel);
+          setModels(mList || []);
+        }
+        await loadAdminData();
       } catch (err) {
         console.error(err);
-        alert("Failed to delete model.");
+        const errorMsg = err.response?.data?.error || err.response?.data?.message || "Failed to delete model.";
+        alert(errorMsg);
       }
     }
   };
@@ -424,10 +440,11 @@ function AdminDashboard() {
           const vList = await getVariantsByModel(selectedModelForVariant);
           setVariants(vList || []);
         }
-        loadAdminData();
+        await loadAdminData();
       } catch (err) {
         console.error(err);
-        alert("Failed to delete variant.");
+        const errorMsg = err.response?.data?.error || err.response?.data?.message || "Failed to delete variant.";
+        alert(errorMsg);
       }
     }
   };

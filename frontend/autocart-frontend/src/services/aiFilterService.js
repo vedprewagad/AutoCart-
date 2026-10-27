@@ -5,7 +5,7 @@ let liveCatalogCache = null;
 let cacheTimestamp = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache
 
-export const getLiveCatalogModels = async () => {
+const getLiveCatalogModels = async () => {
   const now = Date.now();
   if (liveCatalogCache && (now - cacheTimestamp < CACHE_TTL_MS)) {
     return liveCatalogCache;

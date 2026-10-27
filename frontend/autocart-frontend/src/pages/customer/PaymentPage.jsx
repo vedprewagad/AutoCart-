@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getEmiProducts, getCardOffers, createPurchaseEnquiry } from "../../services/transactionService";
 import { getVariantColours } from "../../services/catalogService";
@@ -23,6 +23,7 @@ function PaymentPage() {
   const [createdEnquiry, setCreatedEnquiry] = useState(null);
   const [financingError, setFinancingError] = useState(null);
   const [financingLoading, setFinancingLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   const loadFinancingData = async () => {
     setFinancingLoading(true);
@@ -96,6 +97,9 @@ function PaymentPage() {
   };
 
   const handleSubmitEnquiry = async () => {
+    if (isSubmittingRef.current || submitting) return;
+    isSubmittingRef.current = true;
+
     const resolvedDealerId = inventory?.dealerId || location.state?.dealerId;
     const resolvedUserId = user?.id;
     const resolvedInventoryId = inventory?.id || location.state?.inventoryId;
@@ -136,6 +140,7 @@ function PaymentPage() {
       const errorMsg = err.response?.data?.error || err.response?.data?.message || "Failed to submit enquiry. Please try again.";
       alert(errorMsg);
     } finally {
+      isSubmittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -451,11 +456,18 @@ function PaymentPage() {
             )}
 
             <button
-              className="btn btn-primary btn-lg w-100 fw-bold py-3 shadow-sm rounded-3"
+              className="btn btn-primary btn-lg w-100 fw-bold py-3 shadow-sm rounded-3 d-flex align-items-center justify-content-center gap-2"
               disabled={submitting}
               onClick={handleSubmitEnquiry}
             >
-              {submitting ? "Submitting Enquiry..." : "Submit Purchase Enquiry →"}
+              {submitting ? (
+                <>
+                  <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                  <span>Processing Enquiry...</span>
+                </>
+              ) : (
+                "Submit Purchase Enquiry →"
+              )}
             </button>
           </div>
         </div>
