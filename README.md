@@ -13,6 +13,35 @@ AutoCart is split into modular microservices around business domains:
 
 ---
 
+## Platform Showcase
+
+### 1. Customer Marketplace & Car Catalog (`/`)
+*Dynamic hero banner, multi-attribute vehicle search, brand filters, and floating AI assistant.*
+
+![Customer Marketplace & Car Catalog](docs/screenshots/01_customer_marketplace.png)
+
+### 2. Vehicle Details & Financing / EMI Calculator
+*Color selections, detailed technical specifications grid, EMI financing options, and dealer comparisons.*
+
+![Vehicle Details & Financing](docs/screenshots/02_vehicle_details_financing.png)
+
+### 3. Admin Central Authority Dashboard (`/dashboard`)
+*Platform KPI statistics, dealer approvals, and catalogue management.*
+
+![Admin Dashboard](docs/screenshots/03_admin_dashboard.png)
+
+### 4. Authorized Dealer Portal (`/dealer`)
+*Inventory management, live pricing discounts, and test drive booking management.*
+
+![Dealer Portal](docs/screenshots/04_dealer_portal.png)
+
+### 5. AI Car Advisor
+*Conversational assistant providing instant vehicle recommendations, real-time spec cards, and quick-reply suggestion chips.*
+
+![AI Car Advisor](docs/screenshots/05_ai_car_advisor.png)
+
+---
+
 ## 1. Prerequisites
 
 Before running the platform, ensure you have the following installed:
