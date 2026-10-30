@@ -54,11 +54,8 @@ public class LoginAttemptLimiter {
         if (isGatewayOrLocalhost(remoteAddr)) {
             String xForwardedFor = request.getHeader("X-Forwarded-For");
             if (xForwardedFor != null && !xForwardedFor.isBlank()) {
-                return xForwardedFor.split(",")[0].trim();
-            }
-            String realIp = request.getHeader("X-Real-IP");
-            if (realIp != null && !realIp.isBlank()) {
-                return realIp.trim();
+                String[] parts = xForwardedFor.split(",");
+                return parts[parts.length - 1].trim();
             }
         }
         return remoteAddr;

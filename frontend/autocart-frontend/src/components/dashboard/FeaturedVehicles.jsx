@@ -20,6 +20,7 @@ function FeaturedVehicles() {
   const [aiTransmission, setAiTransmission] = useState(null);
   const [aiMaxPrice, setAiMaxPrice] = useState(null);
   const [aiMinPrice, setAiMinPrice] = useState(null);
+  const [isAiFilterActive, setIsAiFilterActive] = useState(false);
 
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -42,13 +43,24 @@ function FeaturedVehicles() {
     const handleAiFilterApply = (e) => {
       const aiResult = e.detail;
       if (!aiResult) return;
-      if (aiResult.brand) setSelectedBrand(aiResult.brand);
-      if (aiResult.bodyType) setSelectedBodyType(aiResult.bodyType);
-      if (aiResult.fuelType) setSelectedFuelType(aiResult.fuelType);
-      if (aiResult.transmission) setAiTransmission(aiResult.transmission);
-      if (aiResult.maxPrice) setAiMaxPrice(aiResult.maxPrice);
-      if (aiResult.minPrice) setAiMinPrice(aiResult.minPrice);
-      if (aiResult.sortBy) setSelectedSortBy(aiResult.sortBy);
+      setSelectedBrand(aiResult.brand || "");
+      setSelectedBodyType(aiResult.bodyType || "");
+      setSelectedFuelType(aiResult.fuelType || "");
+      setAiTransmission(aiResult.transmission || null);
+      setAiMaxPrice(aiResult.maxPrice || null);
+      setAiMinPrice(aiResult.minPrice || null);
+      setSelectedSortBy(aiResult.sortBy || "");
+      setIsAiFilterActive(
+        Boolean(
+          aiResult.brand ||
+          aiResult.bodyType ||
+          aiResult.fuelType ||
+          aiResult.transmission ||
+          aiResult.maxPrice ||
+          aiResult.minPrice ||
+          aiResult.sortBy
+        )
+      );
       setPage(0);
     };
 
@@ -111,6 +123,18 @@ function FeaturedVehicles() {
     navigate(`/models/${vehicle.modelId || vehicle.variantId}`);
   };
 
+  const handleClearAiFilters = () => {
+    setSelectedBrand("");
+    setSelectedFuelType("");
+    setSelectedBodyType("");
+    setSelectedSortBy("");
+    setAiTransmission(null);
+    setAiMaxPrice(null);
+    setAiMinPrice(null);
+    setIsAiFilterActive(false);
+    setPage(0);
+  };
+
   const handleResetFilters = () => {
     setSelectedBrand("");
     setSelectedFuelType("");
@@ -119,6 +143,7 @@ function FeaturedVehicles() {
     setAiTransmission(null);
     setAiMaxPrice(null);
     setAiMinPrice(null);
+    setIsAiFilterActive(false);
     setPage(0);
     if (location.state) {
       navigate("/dashboard", { replace: true, state: {} });
@@ -206,8 +231,19 @@ function FeaturedVehicles() {
             <option value="newest">Newest Arrivals</option>
           </select>
 
+          {isAiFilterActive && (
+            <button
+              type="button"
+              className="btn btn-outline-danger btn-sm"
+              onClick={handleClearAiFilters}
+            >
+              Clear AI filters
+            </button>
+          )}
+
           {(selectedBrand || selectedFuelType || selectedBodyType || quickBodyType || maxPriceRupees) && (
             <button
+              type="button"
               className="btn btn-outline-secondary btn-sm"
               onClick={handleResetFilters}
             >
